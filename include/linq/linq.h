@@ -1,7 +1,5 @@
 #pragma once
 
-
-
 #include <iostream>
 #include <functional>
 #include <type_traits>
@@ -9,221 +7,361 @@
 #include <vector>
 #include <algorithm>
 
-namespace Linq
+//version withouth
+//version only filter
+//verison only converter
+//version full
+
+template <int level = 0>
+class Iterator
+{};
+
+template <>
+class Iterator<0>
+{};
+
+template <>
+class Iterator<1>
+{};
+
+template <>
+class Iterator<2>
+{};
+
+// filter and converter
+template <>
+class Iterator<3>
+{};
+
+namespace linq
 {
-	template<typename _Handle, typename Iterator>
-	class iterator : public Iterator
+
+	template<typename _Handle, typename _Base, int _Level = 1>
+	class iterator : public _Base
 	{
-	protected:
 		_Handle const &_handle;
 	public:
-		typedef typename Iterator::value_type value_t;
-
-
 		iterator() = delete;
-		iterator(iterator const &) = default;
-		iterator(Iterator const rhs, _Handle const &handle)
-			: Iterator(rhs), _handle(handle)
+		iterator(_Base const &base, _Handle const &handle)
+			: _Base(base), _handle(handle)
 		{}
 
-		~iterator() = default;
-		
-		inline value_t operator*() const { return *static_cast<Iterator const &>(*this); }
-		inline value_t &operator*() { return *static_cast<Iterator &>(*this); }
-		inline bool operator!=(iterator const &rhs) const
-		{
-			return static_cast<Iterator const &>(*this) != static_cast<Iterator const &>(rhs);
-		}
+		inline auto operator*() const { return std::move(_handle._converter(*static_cast<_Base const &>(*this))); }
 
-		iterator &operator++()
-		{
-			do {
-				Iterator::operator++();
-			} while (!static_cast<bool>(_handle(*this)));
+		iterator &operator++() {
+			do
+			{
+				static_cast<_Base &>(*this).operator++();
+			} while (static_cast<_Base const &>(*this) != static_cast<_Base const &>(_handle._end) && !_handle._filter(*static_cast<_Base const &>(*this)));
+			return (*this);
+		}
+	};
+
+	template<typename _Handle, typename _Base>
+	class iterator<_Handle, _Base, 3> : public _Base
+	{
+		_Handle const &_handle;
+	public:
+		iterator() = delete;
+		iterator(_Base const &base, _Handle const &handle)
+			: _Base(base), _handle(handle)
+		{}
+
+		inline auto operator*() const { return std::move(_handle._converter(*static_cast<_Base const &>(*this))); }
+
+		inline iterator &operator++() {
+			static_cast<_Base &>(*this).operator++();
 			return *this;
 		}
 	};
 
-	//template<typename _Handle, typename Iterator>
+	template<typename _Handle, typename _Base>
+	class iterator<_Handle, _Base, 2> : public _Base
+	{
+		_Handle const &_handle;
+	public:
+		iterator() = delete;
+		iterator(_Base const &base, _Handle const &handle)
+			: _Base(base), _handle(handle)
+		{}
 
+		inline auto operator*() const { return *static_cast<_Base const &>(*this); }
 
+		iterator &operator++() {
+			do
+			{
+				static_cast<_Base &>(*this).operator++();
+			} while (static_cast<_Base const &>(*this) != static_cast<_Base const &>(_handle._end) && !_handle._filter(*static_cast<_Base const &>(*this)));
+			return (*this);
+		}
+	};
 
-	template<class _Handle, class _Container>
+	template<typename _Handle, typename _Base>
+	class iterator<_Handle, _Base, 1> : public _Base
+	{
+	public:
+		iterator(_Base const &base)
+			: _Base(base)
+		{}
+	};
+
+	/*Linq Object with Filter and Converter*/
+	template<typename _Container, typename _Out = void, int _Level = 1>
 	class Object
 	{
 	public:
-		typedef typename _Container::iterator base_iterator_t;
-		typedef typename _Container::value_type value_t;
-		typedef typename std::function<bool(value_t &)> lambda_t;
-		typedef typename iterator<_Handle, base_iterator_t> iterator_t;
-	protected:
+		using type = Object<_Container, _Out, _Level>;
+		using base_iterator_t = typename _Container::iterator;
+		using iterator_t = iterator<type, base_iterator_t, _Level>;
+		using value_type = typename _Container::value_type;
 
-		_Container &_container;
-		lambda_t const _predicate;
+
+		typedef typename std::function<bool(value_type &)> base_filter;
+		typedef typename std::function<_Out(value_type &)> base_converter;
+
+	protected:
+		base_filter const _filter;
+		base_converter const _converter;
 		iterator_t const _begin;
 		iterator_t const _end;
+	private:
+		friend iterator_t;
+	public:
 
 		Object() = delete;
-		Object(Object const &) = default;
-		//Object(_Container &cont, lambda_t const &pred)
-		//	: _container(cont), _predicate(pred), _begin(begin), _end(end)
-		//{
-		//}
-		//Object(_Container &cont, lambda_t const &&pred, iterator_t const begin, iterator_t const end)
-		//	: _container(cont), _predicate(std::forward<lambda_t>(pred)), _begin(begin), _end(end)
-		//{
-		//}
+		Object(base_iterator_t const &begin, base_iterator_t const &end, std::function<bool(value_type &)> const &filter, std::function<_Out(value_type &)> const &converter)
+			: _filter(filter), _converter(converter),
+			_begin(begin, *this), _end(end, *this)
+		{}
 
-		Object(_Container &cont, lambda_t const &pred, iterator_t const begin, iterator_t const end)
-			: _container(cont), _predicate(pred), _begin(begin), _end(end)
+		template<typename New_Out_t>
+		auto select(std::function<New_Out_t(_Out &)> const &next_converter) const
 		{
-		}
-		~Object() = default;
-
-	public:
-
-		bool operator()(base_iterator_t &it) const
-		{
-			return it == static_cast<base_iterator_t const &>(_end) || _predicate(*it);
+			const auto &cur_converter = _converter;
+			const auto &new_converter = [cur_converter, next_converter](value_type &value) -> New_Out_t
+			{
+				auto tmp = cur_converter(value);
+				return next_converter(tmp);
+			};
+			return Object<_Container, New_Out_t, 4>(static_cast<base_iterator_t>(_begin), static_cast<base_iterator_t>(_end), _filter, new_converter);
 		}
 
-		iterator_t begin() { return _begin; }
-		iterator_t end() { return _end; }
+		auto where(std::function<bool(_Out &)> const &next_filter) const
+		{
+			const auto &cur_converter = _converter;
+			const auto &cur_filter = _filter;
+			const auto &new_filter = [cur_converter, cur_filter, next_filter](value_type &value) -> bool
+			{
+				auto tmp = cur_converter(value);
+				return cur_filter(value) && next_filter(tmp);
+			};
+			return Object<_Container, _Out, 4>(std::find_if(static_cast<base_iterator_t>(_begin), static_cast<base_iterator_t>(_end), new_filter), static_cast<base_iterator_t>(_end),
+				new_filter, cur_converter);
+		}
 
-		template<typename _ContainerOut>
-		_ContainerOut &to(_ContainerOut &out) const
+		inline iterator_t const begin() const { return _begin; }
+		inline iterator_t const end() const { return _end; }
+
+		/* export */
+		template<typename _OutContainer>
+		_OutContainer to()
+		{
+			_OutContainer out;
+			std::copy(_begin, _end, std::back_inserter(out));
+			return std::move(out);
+		}
+
+		template<typename _OutContainer>
+		inline void to(_OutContainer &out)
 		{
 			std::copy(_begin, _end, std::back_inserter(out));
-			return out;
-		}
-
-		template<typename _ContainerOut = _Container>
-		_ContainerOut to() const
-		{
-			_ContainerOut out;
-			std::copy(_begin, _end, std::back_inserter(out));
-			return std::forward<_ContainerOut>(out);
 		}
 	};
 
-	//template<class _Container, typename _Out_t>
-	//class Select : public Object<Select<_Container, _Out_t>, _Container>
-	//{
-
-	//public:
-
-
-
-	//	typedef typename std::vector<_Out_t>::iterator base_iterator_t;
-	//	typedef typename _Container::value_type value_type;
-	//	typedef typename Linq::Object<Select<std::vector<_Out_t>, _Out_t>, std::vector<_Out_t>> base_t;
-	//	typedef typename Linq::iterator<Select<std::vector<_Out_t>, _Out_t>, base_iterator_t>::iterator iterator_t;
-
-	//	typedef typename std::function<_Out_t(value_type &)> inserter_t;
-
-	//	Select() = delete;
-
-	//	Select(Select const &rhs)
-	//		: base_t(*new std::vector<_Out_t>(rhs._container), rhs._predicate, rhs._begin, rhs._end)
-	//	{
-	//	}
-
-
-	//	//bool operator()(base_iterator_t &it)
-	//	//{
-	//	//	return it == static_cast<base_iterator_t const &>(_end);
-	//	//}
-
-	//	Select(_Container &cont, inserter_t const &pred)
-	//		: base_t(cont,
-	//			[](value_type &) -> bool { return true; },
-	//				iterator_t(_container.begin(), *this),
-	//				iterator_t(_container.end()  , *this)),
-	//		_inserter(pred)
-	//	{
-	//		//for (auto it : cont)
-	//		//	_container.push_back(pred(it));
-	//	}
-
-	//	~Select() { delete &_container; }
-
-	//	//auto where(_Pred const & next_pred) const
-	//	//{
-	//	//	auto pred = _predicate;
-	//	//	_Pred new_pred([pred, next_pred](value_t &val) -> bool
-	//	//	{
-	//	//		OutType 
-
-	//	//		return pred(val) && next_pred(val);
-	//	//	});
-
-	//	//	return Where<std::vector<Out_t>, decltype(new_pred)>(_container, new_pred);
-	//	//}
-	//private:
-	//	inserter_t const _inserter;
-	//};
-
-
-	template<class _Container>
-	class Where : public Object<Where<_Container>, _Container>
+	template<typename _Container, typename _Out>
+	class Object<_Container, _Out, 3>
 	{
 	public:
+		using type = Object<_Container, _Out, 3>;
+		using base_iterator_t = typename _Container::iterator;
+		using iterator_t = iterator<type, base_iterator_t, 3>;
+		using value_type = typename _Container::value_type;
 
+		typedef typename std::function<_Out(value_type &)> base_converter;
+
+	protected:
+		base_converter const _converter;
+		iterator_t const _begin;
+		iterator_t const _end;
+	private:
+		friend iterator_t;
+	public:
+
+		Object() = delete;
+		Object(base_iterator_t const &begin, base_iterator_t const &end, std::function<_Out(value_type &)> const &converter)
+			: _converter(converter),
+			_begin(begin, *this), _end(end, *this)
+		{}
+
+		template<typename New_Out_t>
+		auto select(std::function<New_Out_t(_Out &)> const &next_converter) const
+		{
+			const auto &cur_converter = _converter;
+			const auto &new_converter = [cur_converter, next_converter](value_type &value) -> New_Out_t
+			{
+				auto tmp = cur_converter(value);
+				return next_converter(tmp);
+			};
+			return Object<_Container, New_Out_t, 3>(static_cast<base_iterator_t>(_begin), static_cast<base_iterator_t>(_end), new_converter);
+		}
+
+		//template<typename _Pred>
+		auto where(std::function<bool (_Out &)> const &next_filter) const
+		{
+			const auto &cur_converter = _converter;
+			const auto &new_filter = [cur_converter, next_filter](value_type &value) -> bool
+			{
+				auto tmp = cur_converter(value);
+				return next_filter(tmp);
+			};
+			return Object<_Container, _Out, 4>(std::find_if(static_cast<base_iterator_t>(_begin), static_cast<base_iterator_t>(_end), new_filter), static_cast<base_iterator_t>(_end),
+				new_filter, cur_converter);
+		}
+
+		inline iterator_t const begin() const { return _begin; }
+		inline iterator_t const end() const { return _end; }
+
+		/* export */
+		template<typename _OutContainer>
+		_OutContainer to() const
+		{
+			_OutContainer out;
+			std::copy(_begin, _end, std::back_inserter(out));
+			return std::move(out);
+		}
+
+		template<typename _OutContainer>
+		inline void to(_OutContainer &out) const
+		{
+			std::copy(_begin, _end, std::back_inserter(out));
+		}
+	};
+
+	template<typename _Container>
+	class Object<_Container, void, 2>
+	{
+	public:
+		using type = Object<_Container, void, 2>;
+		using base_iterator_t = typename _Container::iterator;
+		using iterator_t = iterator<type, base_iterator_t, 2>;
+		using value_type = typename _Container::value_type;
+
+
+		typedef typename std::function<bool(value_type &)> base_filter;
+
+	protected:
+		base_filter const _filter;
+		iterator_t const _begin;
+		iterator_t const _end;
+	private:
+		friend iterator_t;
+	public:
+
+		Object() = delete;
+		Object(base_iterator_t const &begin, base_iterator_t const &end, std::function<bool(value_type &)> const &filter)
+			: _filter(filter),
+			_begin(begin, *this), _end(end, *this)
+		{}
+
+		template<typename New_Out_t>
+		auto select(std::function<New_Out_t(value_type &)> const &next_converter) const
+		{
+			return Object<_Container, New_Out_t, 4>(static_cast<base_iterator_t>(_begin), static_cast<base_iterator_t>(_end), _filter, next_converter);
+		}
+
+		auto where(std::function<bool(value_type &)> const &next_filter) const
+		{
+			const auto &cur_filter = _filter;
+			const auto &new_filter = [cur_filter, next_filter](value_type &value) -> bool
+			{
+				return cur_filter(value) && next_filter(value);
+			};
+			return Object<_Container, void, 2>(std::find_if(static_cast<base_iterator_t const &>(_begin), static_cast<base_iterator_t const &>(_end), new_filter), static_cast<base_iterator_t const &>(_end),
+				new_filter);
+		}
+
+		inline iterator_t const begin() const { return _begin; }
+		inline iterator_t const end() const { return _end; }
+
+		/* export */
+		template<typename _OutContainer>
+		_OutContainer to() const
+		{
+			_OutContainer out;
+			std::copy(_begin, _end, std::back_inserter(out));
+			return std::move(out);
+		}
+
+		template<typename _OutContainer>
+		inline void to(_OutContainer &out) const
+		{
+			std::copy(_begin, _end, std::back_inserter(out));
+		}
+	};
+
+	template<typename _Container>
+	class Object<_Container, void, 1>
+	{
+	public:
+		using type = Object<_Container, void, 1>;
 		typedef typename _Container::iterator base_iterator_t;
+		using iterator_t = iterator<type, base_iterator_t, 1>;
 		typedef typename _Container::value_type value_type;
 
-		typedef typename Linq::Object<Where<_Container>, _Container> base_t;
-		typedef typename Linq::iterator<Where<_Container>, base_iterator_t> iterator_t;
+	protected:
+		iterator_t const _begin;
+		iterator_t const _end;
+	public:
 
-		typedef typename std::function<bool(value_type &)> lambda_t;
+		Object() = delete;
+		Object(base_iterator_t const &begin, base_iterator_t const &end)
+			: _begin(begin), _end(end)
+		{}
 
-		Where() = delete;
-		Where(Where const &rhs)
-			: base_t(rhs._container, rhs._predicate, rhs._begin, rhs._end)
+		template<typename New_Out_t>
+		auto select(std::function<New_Out_t(value_type &)> const &next_converter) const
 		{
+			return Object<_Container, New_Out_t, 3>(
+				static_cast<base_iterator_t const &>(_begin),
+				static_cast<base_iterator_t const &>(_end),
+				next_converter);
 		}
 
-		Where(_Container &cont, lambda_t const &pred)
-			: base_t(cont, pred,
-				iterator_t(std::find_if(cont.begin(), cont.end(), pred), *this),
-				iterator_t(cont.end(), *this))
+		auto where(std::function<bool(value_type &)> const &next_filter) const
 		{
+			return Object<_Container, void, 2>(
+				std::find_if(static_cast<base_iterator_t const &>(_begin), static_cast<base_iterator_t const &>(_end), next_filter),
+				static_cast<base_iterator_t const &>(_end),
+				next_filter);
 		}
 
-		template<typename OutType>
-		auto select(std::function<OutType(value_t &)> const &next_pred)
-		{
-			return Select<Where<_Container>, OutType>(*this, next_pred);
-		}
-
-		auto where(lambda_t const & next_pred) const
-		{
-			auto pred = _predicate;
-			lambda_t new_pred([pred, next_pred](value_type &val) -> bool
-			{
-				return pred(val) && next_pred(val);
-			});
-
-			return Where<_Container>(_container, new_pred);
-		}
-
+		inline iterator_t const begin() const { return _begin; }
+		inline iterator_t const end() const { return _end; }
 	};
-}
 
-//template<class _Container, class _Pred, typename _Out_t>
-//Linq::Select<_Container, _Pred, _Out_t> select(_Container &cont, _Pred const &&pr)
-//{
-//	return Linq::Select<_Container, _Pred>(cont, std::forward<_Pred const>(pr));
-//}
+	template<typename T>
+	auto from(T &container)
+	{
+		return std::move(linq::Object<T>(container.begin(), container.end()));
+	}
 
-template<class _Container, class _Pred>
-Linq::Where<_Container> where(_Container &cont, _Pred const &&pr)
-{
-	return Linq::Where<_Container>(cont, std::forward<_Pred const>(pr));
-}
+	template<typename _Out, typename _Container, typename _Pred>
+	auto select(_Container &cont, _Pred const &converter)
+	{
+		return std::move(linq::Object<_Container, _Out, 3>(
+			cont.begin(),
+			cont.end(),
+			converter));
+	}
 
-template<class _Container, class _Pred>
-Linq::Where<_Container> where(_Container &cont, _Pred const &pr)
-{
-	return Linq::Where<_Container>(cont, std::function<bool(_Container::reference)>(pr));
 }
