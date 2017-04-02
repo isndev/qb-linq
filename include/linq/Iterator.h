@@ -67,6 +67,7 @@ namespace linq
 		inline bool operator!=(iterator const &rhs) const noexcept {
 			return static_cast<Base const &>(*this) != static_cast<Base const &>(rhs);
 		}
+
 	};
 
 	template<typename Proxy, typename Base, typename Out>
