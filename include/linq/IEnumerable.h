@@ -22,6 +22,12 @@ namespace linq
 			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).select(next_loader))>;
 			return ret_t(std::move(static_cast<Handle const &>(*this).select(next_loader)));
 		}
+		template<typename... Funcs>
+		inline auto SelectMany(Funcs const &...keys) const noexcept
+		{
+			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).selectMany(keys...))>;
+			return ret_t(std::move(static_cast<Handle const &>(*this).selectMany(keys...)));
+		}
 		template<typename Func>
 		inline auto Where(Func const &next_filter) const noexcept
 		{

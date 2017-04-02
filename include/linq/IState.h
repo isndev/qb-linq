@@ -36,6 +36,19 @@ namespace linq
 				static_cast<Base_It const &>(this->_end),
 				next_loader);
 		}
+		template<typename... Funcs>
+		auto selectMany(Funcs const &...loaders) const noexcept
+		{
+			auto const &next_loader = [loaders...] (Out val)
+			{
+				return std::tuple<decltype(loaders(val))...>(loaders(val)...);
+			};
+
+			return Select<Base_It, decltype(next_loader)>(
+				static_cast<Base_It const &>(this->_begin),
+				static_cast<Base_It const &>(this->_end),
+				next_loader);
+		}
 		template<typename Func>
 		auto where(Func const &next_filter) const noexcept
 		{

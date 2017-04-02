@@ -257,7 +257,9 @@ void bench<user>()
 				linq::asc([](const auto &key) { return key.groupId; }),
 				linq::desc([](const auto &key) { return key.created; }))
 			.Where([](const auto &val) noexcept { return val.groupId > 7; })
-			.Select([](const auto &val) noexcept { return val.groupId; })
+			.SelectMany([](const auto &val) noexcept { return val.groupId; },
+				[](const auto &val) noexcept { return val.created; })
+			.Select([](const auto &val) noexcept { return std::get<0>(val); })
 			.Where([](const auto &val) noexcept { return val > 7; })
 			.Sum();
 	});
