@@ -13,7 +13,7 @@
 namespace linq
 {
 
-	template<typename _Handle, typename _Base, int _Level = 1>
+	template<typename _Handle, typename _Base, typename _Out = void, int _Level = 1>
 	class iterator : public _Base
 	{
 		_Handle const &_handle;
@@ -25,19 +25,19 @@ namespace linq
 			: _Base(base), _handle(handle)
 		{}
 
-		inline auto operator*() const noexcept { return std::move(_handle._converter(*static_cast<_Base const &>(*this))); }
+		inline _Out operator*() const noexcept { return _handle._converter(*static_cast<_Base const &>(*this)); }
 
 		iterator &operator++() noexcept {
 			do
 			{
 				static_cast<_Base &>(*this).operator++();
-			} while (static_cast<_Base const &>(*this) != static_cast<_Base const &>(_handle._end) && !_handle._filter(*static_cast<_Base const &>(*this)));
+			} while (static_cast<_Base const &>(*this) != static_cast<_Base const &>(_handle._end) && false);//!_handle._filter(*static_cast<_Base const &>(*this)));
 			return (*this);
 		}
 	};
 
-	template<typename _Handle, typename _Base>
-	class iterator<_Handle, _Base, 3> : public _Base
+	template<typename _Handle, typename _Base, typename _Out>
+	class iterator<_Handle, _Base, _Out, 3> : public _Base
 	{
 		_Handle const &_handle;
 	public:
@@ -48,7 +48,7 @@ namespace linq
 			: _Base(base), _handle(handle)
 		{}
 
-		inline auto operator*() const noexcept { return std::move(_handle._converter(*static_cast<_Base const &>(*this))); }
+		inline _Out operator*() const noexcept { return _handle._converter(*static_cast<_Base const &>(*this)); }
 
 		inline iterator &operator++() noexcept {
 			static_cast<_Base &>(*this).operator++();
@@ -56,8 +56,8 @@ namespace linq
 		}
 	};
 
-	template<typename _Handle, typename _Base>
-	class iterator<_Handle, _Base, 2> : public _Base
+	template<typename _Handle, typename _Base, typename _Out>
+	class iterator<_Handle, _Base, _Out, 2> : public _Base
 	{
 		_Handle const &_handle;
 	public:
@@ -68,8 +68,7 @@ namespace linq
 			: _Base(base), _handle(handle)
 		{}
 
-		inline auto operator*() const noexcept { return *static_cast<_Base const &>(*this); }
-		//inline auto &operator*() { return *static_cast<_Base &>(*this); }
+		inline _Out operator*() const noexcept { return *static_cast<_Base const &>(*this); }
 
 		iterator &operator++() noexcept {
 			do
@@ -80,8 +79,8 @@ namespace linq
 		}
 	};
 
-	template<typename _Handle, typename _Base>
-	class iterator<_Handle, _Base, 1> : public _Base
+	template<typename _Handle, typename _Base, typename _Out>
+	class iterator<_Handle, _Base, _Out, 1> : public _Base
 	{
 	public:
 		iterator(_Base const &base, _Handle const &)
@@ -89,10 +88,10 @@ namespace linq
 		{}
 	};
 
-	template<typename _Handle, typename _Base_It, int _Level>
+	template<typename _Handle, typename _Base_It, typename _Out, int _Level>
 	class Base
 	{
-		using iterator_t = iterator<_Handle, _Base_It, _Level>;
+		using iterator_t = iterator<_Handle, _Base_It, _Out, _Level>;
 	protected:
 		iterator_t const _begin;
 		iterator_t const _end;
@@ -128,8 +127,8 @@ namespace linq
 
 		auto sum()
 		{
-			decltype(*_begin) result{};
-			for (auto it : *this)
+			std::remove_const<std::remove_reference<decltype(*_begin)>::type>::type result{};
+			for (_Out it : *this)
 				result += it;
 			return result;
 		}
@@ -139,15 +138,15 @@ namespace linq
 
 	/*Linq Object with Filter and Converter*/
 	template<typename _Container, typename _Out = void, int _Level = 1>
-	class Object : public Base<Object<_Container, _Out, 4>, typename _Container::iterator, 4>
+	class Object : public Base<Object<_Container, _Out, 4>, typename _Container::iterator, _Out, 4>
 	{
 	public:
 		using base_iterator_t = typename _Container::iterator;
 		using value_type = typename _Container::value_type;
 
 		using handle_t = Object<_Container, _Out, _Level>;
-		using base_t = Base<Object<_Container, _Out, 4>, base_iterator_t, 4>;
-		using iterator_t = iterator<handle_t, base_iterator_t, _Level>;
+		using base_t = Base<Object<_Container, _Out, 4>, base_iterator_t, _Out, 4>;
+		using iterator_t = iterator<handle_t, base_iterator_t, _Out, _Level>;
 		using base_filter = std::function<bool(value_type &)>;
 		using base_converter = std::function<_Out(value_type &)>;
 
@@ -168,18 +167,17 @@ namespace linq
 			: base_t(begin, end), _filter(filter), _converter(converter)
 		{}
 
-		template<typename New_Out_t>
-		auto select(std::function<New_Out_t(_Out &)> const &next_converter) const noexcept
+		template<typename Func>
+		auto select(Func const &next_converter) const noexcept
 		{
 			const auto &last_converter = _converter;
-			return Object<_Container, New_Out_t, 4>(
+			return Object<_Container, decltype(next_converter(std::declval<_Out>())), 4>(
 				static_cast<base_iterator_t const &>(_begin),
 				static_cast<base_iterator_t const &>(_end),
 				_filter,
-				[last_converter, next_converter](value_type &value) noexcept -> New_Out_t
+				[last_converter, next_converter](value_type &value) noexcept -> decltype(next_converter(std::declval<_Out>()))
 			    {
-				    auto tmp = last_converter(value);
-				    return next_converter(tmp);
+				    return next_converter(last_converter(value));
 			    });
 		}
 
@@ -189,8 +187,7 @@ namespace linq
 			const auto &last_filter = _filter;
 			const auto &new_filter = [last_converter, last_filter, next_filter](value_type &value) noexcept -> bool
 			{
-				auto tmp = last_converter(value);
-				return last_filter(value) && next_filter(tmp);
+				return last_filter(value) && next_filter(last_converter(value));
 			};
 			return Object<_Container, _Out, 4>(
 				std::find_if(static_cast<base_iterator_t const &>(_begin), static_cast<base_iterator_t const &>(_end), new_filter),
@@ -202,15 +199,15 @@ namespace linq
 	};
 
 	template<typename _Container, typename _Out>
-	class Object<_Container, _Out, 3> : public Base<Object<_Container, _Out, 3>, typename _Container::iterator, 3>
+	class Object<_Container, _Out, 3> : public Base<Object<_Container, _Out, 3>, typename _Container::iterator, _Out, 3>
 	{
 	public:
 		using base_iterator_t = typename _Container::iterator;
 		using value_type = typename _Container::value_type;
 
 		using handle_t = Object<_Container, _Out, 3>;
-		using base_t = Base<Object<_Container, _Out, 3>, base_iterator_t, 3>;
-		using iterator_t = iterator<handle_t, base_iterator_t, 3>;
+		using base_t = Base<Object<_Container, _Out, 3>, base_iterator_t, _Out, 3>;
+		using iterator_t = iterator<handle_t, base_iterator_t, _Out, 3>;
 		using base_converter = std::function<_Out(value_type &)>;
 
 	protected:
@@ -228,27 +225,25 @@ namespace linq
 			: base_t(begin, end), _converter(converter)
 		{}
 
-		template<typename New_Out_t>
-		auto select(std::function<New_Out_t(_Out &)> const &next_converter) const noexcept
+		template<typename Func>
+		auto select(Func const &next_converter) const noexcept
 		{
 			const auto &last_converter = _converter;
-			return Object<_Container, New_Out_t, 3>(
+			return Object<_Container, decltype(next_converter(std::declval<_Out>())), 3>(
 				static_cast<base_iterator_t const &>(_begin),
 				static_cast<base_iterator_t const &>(_end),
-				[last_converter, next_converter](value_type &value) noexcept -> New_Out_t
+				[last_converter, next_converter](value_type &value) noexcept -> decltype(next_converter(std::declval<_Out>()))
 			{
-				auto tmp = last_converter(value);
-				return next_converter(tmp);
+				return next_converter(last_converter(value));
 			});
 		}
 
-		auto where(std::function<bool (_Out &)> const &next_filter) const noexcept
+		auto where(std::function<bool (_Out )> const &next_filter) const noexcept
 		{
 			const auto &last_converter = _converter;
 			const auto &new_filter = [last_converter, next_filter](value_type &value) noexcept -> bool
 			{
-				auto tmp = last_converter(value);
-				return next_filter(tmp);
+				return next_filter(last_converter(value));
 			};
 			return Object<_Container, _Out, 4>(
 				std::find_if(static_cast<base_iterator_t const &>(_begin), static_cast<base_iterator_t const &>(_end), new_filter),
@@ -259,15 +254,15 @@ namespace linq
 	};
 
 	template<typename _Container>
-	class Object<_Container, void, 2> : public Base<Object<_Container, void, 2>, typename _Container::iterator, 2>
+	class Object<_Container, void, 2> : public Base<Object<_Container, void, 2>, typename _Container::iterator, typename _Container::value_type&, 2>
 	{
 	public:
 		using base_iterator_t = typename _Container::iterator;
 		using value_type = typename _Container::value_type;
 
 		using handle_t = Object<_Container, void, 2>;
-		using base_t = Base<Object<_Container, void, 2>, base_iterator_t, 2>;
-		using iterator_t = iterator<handle_t, base_iterator_t, 2>;
+		using base_t = Base<Object<_Container, void, 2>, base_iterator_t, value_type&, 2>;
+		using iterator_t = iterator < handle_t, base_iterator_t, value_type&, 2 > ;
 		using base_filter = std::function<bool(value_type &)>;
 
 	protected:
@@ -285,10 +280,10 @@ namespace linq
 			: base_t(begin, end), _filter(filter)
 		{}
 
-		template<typename New_Out_t>
-		auto select(std::function<New_Out_t(value_type &)> const &next_converter) const noexcept
+		template<typename Func>
+		auto select(Func const &next_converter) const noexcept
 		{
-			return Object<_Container, New_Out_t, 4>(
+			return Object<_Container, decltype(next_converter(std::declval<value_type>())), 4>(
 				static_cast<base_iterator_t const &>(_begin),
 				static_cast<base_iterator_t const &>(_end),
 				_filter,
@@ -310,14 +305,14 @@ namespace linq
 	};
 
 	template<typename _Container>
-	class Object<_Container, void, 1> : public Base<Object<_Container, void, 1>, typename _Container::iterator, 1>
+	class Object<_Container, void, 1> : public Base<Object<_Container, void, 1>, typename _Container::iterator, typename _Container::value_type &, 1>
 	{
 	public:
 		typedef typename _Container::iterator base_iterator_t;
 		typedef typename _Container::value_type value_type;
 
 		using handle_t = Object<_Container, void, 1>;
-		using base_t = Base<Object<_Container, void, 1>, base_iterator_t, 1>;
+		using base_t = Base<Object<_Container, void, 1>, base_iterator_t, value_type&, 1>;
 
 	public:
 
@@ -328,10 +323,10 @@ namespace linq
 			: base_t(begin, end)
 		{}
 
-		template<typename New_Out_t>
-		auto select(std::function<New_Out_t(value_type &)> const &next_converter) const noexcept
+		template<typename Func>
+		auto select(Func const &next_converter) const noexcept
 		{
-			return Object<_Container, New_Out_t, 3>(
+			return Object<_Container, decltype(next_converter(std::declval<value_type&>())), 3>(
 				static_cast<base_iterator_t const &>(_begin),
 				static_cast<base_iterator_t const &>(_end),
 				next_converter);
