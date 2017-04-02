@@ -39,12 +39,12 @@ auto test(const std::string& name, F f, double showDuration = 0.5, std::ostream&
 
 	//try
 	//{
-		auto result = time<std::micro>(f);
-		double duration = result.first;
+	auto result = time<std::micro>(f);
+	long long duration = result.first;
 
-		os << "[" << duration << " us] ";
-		os << "-> Success" << std::endl;
-		return result.second;
+	os << "[" << duration << " us] ";
+	os << "-> Success" << std::endl;
+	return result.second;
 	//}
 	//catch (const std::exception& e)
 	//{

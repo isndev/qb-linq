@@ -154,8 +154,8 @@ namespace linq
 		iterator() = delete;
 		~iterator() = default;
 		iterator(iterator const &) = default;
-		iterator(Base const &base, Proxy const &proxy)
-			: Base(base), proxy_(proxy)
+		iterator(Base const &IState, Proxy const &proxy)
+			: Base(IState), proxy_(proxy)
 		{}
 
 		iterator const &operator++() noexcept
@@ -192,8 +192,8 @@ namespace linq
 		iterator() = delete;
 		~iterator() = default;
 		iterator(iterator const &) = default;
-		iterator(Base const &base, Proxy const &proxy)
-			: Base(base), proxy_(proxy)
+		iterator(Base const &IState, Proxy const &proxy)
+			: Base(IState), proxy_(proxy)
 		{}
 
 		inline Out operator*() const noexcept { return proxy_.load(static_cast<Base const &>(*this)); }
@@ -222,8 +222,8 @@ namespace linq
 		iterator() = delete;
 		~iterator() = default;
 		iterator(iterator const &) = default;
-		iterator(Base const &base, Proxy const &proxy)
-			: Base(base), proxy_(proxy)
+		iterator(Base const &IState, Proxy const &proxy)
+			: Base(IState), proxy_(proxy)
 		{}
 
 		inline Out operator*() const noexcept { return *static_cast<Base const &>(*this); }
@@ -255,8 +255,8 @@ namespace linq
 		iterator() = delete;
 		~iterator() = default;
 		iterator(iterator const &) = default;
-		iterator(Base const &base, Proxy const &proxy)
-			: Base(base), proxy_(proxy)
+		iterator(Base const &IState, Proxy const &proxy)
+			: Base(IState), proxy_(proxy)
 		{}
 
 		inline Out operator*() const noexcept { return *static_cast<Base const &>(*this); }
@@ -286,8 +286,8 @@ namespace linq
 		iterator() = delete;
 		~iterator() = default;
 		iterator(iterator const &) = default;
-		iterator(Base const &base, Proxy const &)
-			: Base(base)
+		iterator(Base const &IState, Proxy const &)
+			: Base(IState)
 		{}
 
 		inline Out operator*() const noexcept { return *static_cast<Base const &>(*this); }
@@ -310,10 +310,10 @@ namespace linq
 
 	/*Linq statements*/
 	template<typename Proxy, typename Base_It, typename Out, iterator_type ItType>
-	class base;
+	class IState;
 	//GroupBy
 	template<typename Iterator, typename Proxy>
-	class GroupBy : public base
+	class GroupBy : public IState
 		<
 		GroupBy<Iterator, Proxy>,
 		Iterator,
@@ -325,7 +325,7 @@ namespace linq
 	public:
 		using proxy_t = GroupBy<Iterator, Proxy>;
 		using Out = decltype(*std::declval<Iterator>());
-		using base_t = base<proxy_t, Iterator, Out, iterator_type::basic>;
+		using base_t = IState<proxy_t, Iterator, Out, iterator_type::basic>;
 
 		using iterator_t = linq::iterator<proxy_t, Iterator, Out, iterator_type::basic>;
 
@@ -352,7 +352,7 @@ namespace linq
 	};
 	//OrderBy
 	template<typename Iterator, typename Proxy>
-	class OrderBy : public base
+	class OrderBy : public IState
 		<
 		OrderBy<Iterator, Proxy>,
 		Iterator,
@@ -364,7 +364,7 @@ namespace linq
 	public:
 		using proxy_t = OrderBy<Iterator, Proxy>;
 		using Out = decltype(*std::declval<Iterator>());
-		using base_t = base<proxy_t, Iterator, Out, iterator_type::basic>;
+		using base_t = IState<proxy_t, Iterator, Out, iterator_type::basic>;
 
 		using iterator_t = linq::iterator<proxy_t, Iterator, Out, iterator_type::basic>;
 
@@ -393,7 +393,7 @@ namespace linq
 	//SelectWhere
 	template<typename Iterator, typename Filter, typename Loader>
 	class SelectWhere
-		: public base
+		: public IState
 		<
 		SelectWhere<Iterator, Filter, Loader>,
 		Iterator,
@@ -407,7 +407,7 @@ namespace linq
 		using Out = decltype(std::declval<Loader>()(std::declval<value_type>()));
 
 		using proxy_t = SelectWhere<Iterator, Filter, Loader>;
-		using base_t = base<proxy_t, base_iterator_t, Out, iterator_type::full>;
+		using base_t = IState<proxy_t, base_iterator_t, Out, iterator_type::full>;
 		using iterator_t = linq::iterator<proxy_t, base_iterator_t, Out, iterator_type::full>;
 
 		typedef iterator_t iterator;
@@ -475,7 +475,7 @@ namespace linq
 	//Select
 	template<typename Iterator, typename Loader>
 	class Select
-		: public base
+		: public IState
 		<
 		Select<Iterator, Loader>,
 		Iterator,
@@ -488,7 +488,7 @@ namespace linq
 		using Out = decltype(std::declval<Loader>()(std::declval<value_type>()));
 
 		using proxy_t = Select<Iterator, Loader>;
-		using base_t = base<proxy_t, base_iterator_t, Out, iterator_type::load>;
+		using base_t = IState<proxy_t, base_iterator_t, Out, iterator_type::load>;
 		using iterator_t = linq::iterator<proxy_t, base_iterator_t, Out, iterator_type::load>;
 
 		typedef iterator_t iterator;
@@ -542,7 +542,7 @@ namespace linq
 	//Where
 	template<typename Iterator, typename Filter>
 	class Where
-		: public base
+		: public IState
 		<
 		Where<Iterator, Filter>,
 		Iterator,
@@ -556,7 +556,7 @@ namespace linq
 		using Out = decltype(*std::declval<Iterator>());
 
 		using proxy_t = Where<Iterator, Filter>;
-		using base_t = base<proxy_t, base_iterator_t, Out, iterator_type::filter>;
+		using base_t = IState<proxy_t, base_iterator_t, Out, iterator_type::filter>;
 		using iterator_t = linq::iterator<proxy_t, base_iterator_t, Out, iterator_type::filter>;
 
 		typedef iterator_t iterator;
@@ -607,7 +607,7 @@ namespace linq
 	};
 	//Take
 	template <typename Iterator>
-	class Take : public base
+	class Take : public IState
 		<
 		Take<Iterator>,
 		Iterator,
@@ -619,7 +619,7 @@ namespace linq
 		using Out = decltype(*std::declval<Iterator>());
 
 		using proxy_t = Take<Iterator>;
-		using base_t = base
+		using base_t = IState
 			<
 			Take<Iterator>,
 			Iterator,
@@ -654,7 +654,7 @@ namespace linq
 	//From
 	template<typename Iterator>
 	class From
-		: public base
+		: public IState
 		<
 		From<Iterator>,
 		Iterator,
@@ -668,7 +668,7 @@ namespace linq
 
 
 		using proxy_t = From<Iterator>;
-		using base_t = base<proxy_t, base_iterator_t, value_type, iterator_type::basic>;
+		using base_t = IState<proxy_t, base_iterator_t, value_type, iterator_type::basic>;
 
 		typedef Iterator iterator;
 		typedef Iterator const_iterator;
@@ -685,21 +685,21 @@ namespace linq
 	};
 	//IState
 	template<typename Proxy, typename Base_It, typename Out, iterator_type ItType>
-	class base
+	class IState
 	{
 		using iterator_t = iterator<Proxy, Base_It, Out, ItType>;
 	protected:
 		iterator_t const _begin;
 		iterator_t const _end;
 	public:
-		base() = delete;
-		~base() = default;
-		base(base const &rhs)
+		IState() = delete;
+		~IState() = default;
+		IState(IState const &rhs)
 			:
 			_begin(rhs._begin, static_cast<Proxy const &>(*this)),
 			_end(rhs._end, static_cast<Proxy const &>(*this))
 		{}
-		base(Base_It const &begin, Base_It const &end)
+		IState(Base_It const &begin, Base_It const &end)
 			:
 			_begin(begin, static_cast<Proxy const &>(*this)),
 			_end(end, static_cast<Proxy const &>(*this))
