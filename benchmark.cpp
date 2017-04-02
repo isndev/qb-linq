@@ -2,7 +2,7 @@
 #include <iostream>
 #include <ctime>
 
-#include "linq.h"
+#include "linq/linq.h"
 #include "assert.h"
 
 struct heavy {
@@ -190,18 +190,18 @@ void bench()
 	assertEquals(x11, x13);
 	std::cout << std::endl;
 
-	auto x16 = test("StressTest->IEnumerable (GroupBy)", [&]() {
-		return linq::make_enumerable(data)
-			.Select([](const auto &val) noexcept -> const auto  { return val.map[0]; })
-			.Where([](const auto &val) noexcept { return val > 5; })
-			.Skip(40000)
-			.Take(160000)
-			.GroupBy([](const auto &key) -> auto { return key; }, [](const auto &key) -> auto { return key; })
-			.Select([](auto &pair) {
-			return linq::make_enumerable(pair.second[pair.first])
-				.Sum(); })
-			.Sum();
-	});
+	// auto x16 = test("StressTest->IEnumerable (GroupBy)", [&]() {
+	// 	return linq::make_enumerable(data)
+	// 		.Select([](const auto &val) noexcept -> const auto  { return val.map[0]; })
+	// 		.Where([](const auto &val) noexcept { return val > 5; })
+	// 		.Skip(40000)
+	// 		.Take(160000)
+	// 		.GroupBy([](const auto &key) -> auto { return key; }, [](const auto &key) -> auto { return key; })
+	// 		.Select([](auto &pair) {
+	// 		return linq::make_enumerable(pair.second[pair.first])
+	// 			.Sum(); })
+	// 		.Sum();
+	// });
 
 	//auto x17 = test("StressTest->IEnumerable (GroupBy.ThenBy)", [&]() {
 	//	return linq::make_enumerable(data)
@@ -254,7 +254,6 @@ void bench<user>()
 			.Where([](const auto &val) noexcept { return val.groupId > 5; })
 			.Where([](const auto &val) noexcept { return val.groupId > 6; })
 			.OrderBy(
-				//[](const auto &key) noexcept { return key.groupId; },
 				linq::asc([](const auto &key) { return key.groupId; }),
 				linq::desc([](const auto &key) { return key.created; }))
 			.Where([](const auto &val) noexcept { return val.groupId > 7; })
@@ -272,14 +271,14 @@ void bench<user>()
 	std::cout << std::endl;
 }
 
-int main(int argc, char *argv[])
+int main(int, char *[])
 {
 	std::srand(time(0));
 	std::cout << "# Light objects" << std::endl;
 	bench<light>();
 
-	//std::cout << "# Heavy objects" << std::endl;
-	//bench<heavy>();
+	std::cout << "# Heavy objects" << std::endl;
+	bench<heavy>();
 
 	std::cout << "# User objects" << std::endl;
 	bench<user>();
