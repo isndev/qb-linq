@@ -32,7 +32,7 @@ auto time(F f)
 }
 
 template <typename F>
-auto test(const std::string& name, F f, double showDuration = 0.5, std::ostream& os = std::cout)
+auto test(const std::string& name, F f, std::ostream& os = std::cout)
 {
 	os << "Running test '" << name << "' \t\t\t";
 	os.flush();
