@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <memory>
 #include <functional>
 #include <type_traits>
 #include <utility>
@@ -93,7 +94,7 @@ namespace linq
 		inline _Out operator*() const noexcept { return *static_cast<_Base const &>(*this); }
 
 		iterator const &operator++() noexcept {
-		auto end = static_cast<_Base const &>(_handle._end);
+			auto end = static_cast<_Base const &>(_handle._end);
 			do
 			{
 				static_cast<_Base &>(*this).operator++();
@@ -108,7 +109,7 @@ namespace linq
 			return (*this);
 		}
 
-		inline bool operator!=(iterator const &rhs) { 
+		inline bool operator!=(iterator const &rhs) {
 			return static_cast<_Base const &>(*this) != static_cast<_Base const &>(rhs);
 		}
 	};
@@ -134,6 +135,9 @@ namespace linq
 	/*Linq Object with Filter and Loader*/
 	template<typename Iterator, typename Filter = void, typename Loader = void, int _Level = 1>
 	class Object;
+
+	template<typename Iterator, typename Handle>
+	class GroupBy;
 
 	template<typename _Handle, typename _Base_It, typename _Out, int _Level>
 	class Base
@@ -174,7 +178,7 @@ namespace linq
 		}
 
 		auto sum() const noexcept
-		{	
+		{
 			std::remove_const<std::remove_reference<decltype(*_begin)>::type>::type result{};
 			for (_Out it : *this)
 				result += it;
@@ -183,7 +187,7 @@ namespace linq
 
 		auto count() const noexcept
 		{
-			std::size_t number{0};
+			std::size_t number{ 0 };
 			for (auto it = _begin; it != _end; ++it, ++number);
 			return number;
 		}
@@ -196,7 +200,7 @@ namespace linq
 			return Object<iterator_t>(_begin, ret);
 		}
 
-		auto skip(std::size_t offset) const
+		auto skip(std::size_t offset) const noexcept
 		{
 			auto ret = _begin;
 			for (std::size_t i = 0; i < offset && ret != _end; ++ret, ++i);
@@ -208,13 +212,13 @@ namespace linq
 		auto groupBy(Func const &key) const noexcept
 		{
 			using MapOut = std::map<decltype(key(std::declval<_Out>())), std::vector<_Out>>;
-			
-			MapOut result;
 
-			for(_Out it : *this)
-				result[key(it)].push_back(it);
+			auto result = std::make_shared<MapOut>();
 
-			return std::move(result);
+			for (_Out it : *this)
+				(*result)[key(it)].push_back(it);
+
+			return GroupBy<typename MapOut::iterator, decltype(result)>(result->begin(), result->end(), result);
 		}
 
 		template<typename _OutContainer>
@@ -234,16 +238,22 @@ namespace linq
 
 	};
 
-	//template<typename Handle, typename Key>
-	//class GroupBy : public Handle
-	//{
-	//	Key const key;
-	//	public:
-	//};
+	template<typename Iterator, typename Handle>
+	class GroupBy : public Object<Iterator>
+	{
+		Handle _handle;
+		public:
+			GroupBy() = delete;
+			GroupBy(GroupBy const &) = default;
+			GroupBy(Iterator const &begin, Iterator const &end, Handle handle)
+				: Object<Iterator>(begin, end), _handle(handle)
+			{}
+
+	};
 
 	template<typename Iterator, typename Filter, typename Loader>
 	class Object<Iterator, Filter, Loader, 4> : public Base<Object<Iterator, Filter, Loader, 4>, Iterator,
-	decltype(std::declval<Loader>()(std::declval<decltype(*std::declval<Iterator>())>())), 4>
+		decltype(std::declval<Loader>()(std::declval<decltype(*std::declval<Iterator>())>())), 4>
 	{
 	private:
 		Filter const _filter;
@@ -460,11 +470,11 @@ namespace linq
 		}
 	};
 
-	//template<typename T>
-	//auto from(T const &container)
-	//{
-	//	return std::move(linq::Object<typename T::const_iterator>(std::begin(container), std::end(container)));
-	//}
+	template<typename T>
+	auto from(T const &container)
+	{
+		return std::move(linq::Object<typename T::const_iterator>(std::begin(container), std::end(container)));
+	}
 
 	template<typename T>
 	auto from(T &container)
@@ -477,20 +487,5 @@ namespace linq
 	{
 		return std::move(linq::Object<T>(begin, end));
 	}
-
-	//template<typename T>
-	//auto from<const T>(T &container)
-	//{
-	//	return std::move(linq::Object<typename T::iterator>(std::begin(container), std::end(container)));
-	//}
-
-	//template<typename _Out, typename Iterator, typename _Pred>
-	//auto select(Iterator &cont, _Pred const &loader)
-	//{
-	//	return std::move(linq::Object<Iterator, _Out, 3>(
-	//		cont.begin(),
-	//		cont.end(),
-	//		loader));
-	//}
 
 }
