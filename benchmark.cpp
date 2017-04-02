@@ -115,21 +115,21 @@ void bench()
 	auto x9 = test(" from_select_where_sum", [&]() {
 		return linq::from(data)
 			.select([](const auto &val) noexcept -> const auto { return val.map[0]; })
-			.where([](const auto val) noexcept { return val < 1000; })
+			.where([](const auto val) noexcept { return val > 5; })
 			.sum();
 	});
 
 	auto x10 = test("&from_select_where_sum", [&]() {
 		return linq::from(data)
 			.select([](const auto &val) noexcept -> const auto & { return val.map[0]; })
-			.where([](const auto &val) noexcept { return val < 1000; })
+			.where([](const auto &val) noexcept { return val > 5; })
 			.sum();
 	});
 
 	auto x12 = test("legacy_select_where_sum", [&]() {
 		int result = 0;
 		for (const auto it : data)
-			if (it.map[0] < 1000)
+			if (it.map[0] > 5)
 				result += it.map[0];
 		return result;
 	});

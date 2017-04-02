@@ -1,4 +1,5 @@
-#pragma once
+#ifndef LINQ_H_INCLUDED
+#define LINQ_H_INCLUDED
 
 #include <iostream>
 #include <memory>
@@ -9,7 +10,7 @@
 #include <map>
 #include <algorithm>
 
-//version withouth
+//version without
 //version only filter
 
 namespace linq
@@ -133,6 +134,9 @@ namespace linq
 	};
 
 	/*Linq Object with Filter and Loader*/
+	template<typename _Handle, typename _Base_It, typename _Out, int _Level>
+	class Base;
+
 	template<typename Iterator, typename Filter = void, typename Loader = void, int _Level = 1>
 	class Object;
 
@@ -161,7 +165,7 @@ namespace linq
 
 		auto min() const noexcept
 		{
-			std::remove_const<std::remove_reference<decltype(*_begin)>::type>::type val(*_begin);
+			typename std::remove_const<typename std::remove_reference<decltype(*_begin)>::type>::type val(*_begin);
 			for (_Out it : *this)
 				if (it > val)
 					val = it;
@@ -170,7 +174,7 @@ namespace linq
 
 		auto max() const noexcept
 		{
-			std::remove_const<std::remove_reference<decltype(*_begin)>::type>::type val(*_begin);
+			typename std::remove_const<typename std::remove_reference<decltype(*_begin)>::type>::type val(*_begin);
 			for (_Out it : *this)
 				if (it < val)
 					val = it;
@@ -179,7 +183,7 @@ namespace linq
 
 		auto sum() const noexcept
 		{
-			std::remove_const<std::remove_reference<decltype(*_begin)>::type>::type result{};
+			typename std::remove_const<typename std::remove_reference<decltype(*_begin)>::type>::type result{};
 			for (_Out it : *this)
 				result += it;
 			return result;
@@ -242,12 +246,12 @@ namespace linq
 	class GroupBy : public Object<Iterator>
 	{
 		Handle _handle;
-		public:
-			GroupBy() = delete;
-			GroupBy(GroupBy const &) = default;
-			GroupBy(Iterator const &begin, Iterator const &end, Handle handle)
-				: Object<Iterator>(begin, end), _handle(handle)
-			{}
+	public:
+		GroupBy() = delete;
+		GroupBy(GroupBy const &) = default;
+		GroupBy(Iterator const &begin, Iterator const &end, Handle handle)
+			: Object<Iterator>(begin, end), _handle(handle)
+		{}
 
 	};
 
@@ -292,8 +296,8 @@ namespace linq
 				return next_loader(last_loader(value));
 			};
 			return Object<Iterator, Filter, decltype(new_loader), 4>(
-				static_cast<base_iterator_t const &>(_begin),
-				static_cast<base_iterator_t const &>(_end),
+				static_cast<base_iterator_t const &>(this->_begin),
+				static_cast<base_iterator_t const &>(this->_end),
 				_filter,
 				new_loader);
 		}
@@ -308,8 +312,8 @@ namespace linq
 				return last_filter(value) && next_filter(last_loader(value));
 			};
 			return Object<Iterator, decltype(new_filter), Loader, 4>(
-				std::find_if(static_cast<base_iterator_t const &>(_begin), static_cast<base_iterator_t const &>(_end), new_filter),
-				static_cast<base_iterator_t const &>(_end),
+				std::find_if(static_cast<base_iterator_t const &>(this->_begin), static_cast<base_iterator_t const &>(this->_end), new_filter),
+				static_cast<base_iterator_t const &>(this->_end),
 				new_filter,
 				last_loader);
 		}
@@ -354,8 +358,8 @@ namespace linq
 				return next_loader(last_loader(value));
 			};
 			return Object<Iterator, void, decltype(new_loader), 3>(
-				static_cast<base_iterator_t const &>(_begin),
-				static_cast<base_iterator_t const &>(_end),
+				static_cast<base_iterator_t const &>(this->_begin),
+				static_cast<base_iterator_t const &>(this->_end),
 				new_loader);
 		}
 
@@ -368,8 +372,8 @@ namespace linq
 				return next_filter(last_loader(value));
 			};
 			return Object<Iterator, decltype(new_filter), Loader, 4>(
-				std::find_if(static_cast<base_iterator_t const &>(_begin), static_cast<base_iterator_t const &>(_end), new_filter),
-				static_cast<base_iterator_t const &>(_end),
+				std::find_if(static_cast<base_iterator_t const &>(this->_begin), static_cast<base_iterator_t const &>(this->_end), new_filter),
+				static_cast<base_iterator_t const &>(this->_end),
 				new_filter,
 				last_loader);
 		}
@@ -407,8 +411,8 @@ namespace linq
 		auto select(Func const &next_loader) const noexcept
 		{
 			return Object<Iterator, Filter, decltype(next_loader), 4>(
-				static_cast<base_iterator_t const &>(_begin),
-				static_cast<base_iterator_t const &>(_end),
+				static_cast<base_iterator_t const &>(this->_begin),
+				static_cast<base_iterator_t const &>(this->_end),
 				_filter,
 				next_loader);
 		}
@@ -422,8 +426,8 @@ namespace linq
 				return last_filter(value) && next_filter(value);
 			};
 			return Object<Iterator, Filter, void, 2>(
-				std::find_if(static_cast<base_iterator_t const &>(_begin), static_cast<base_iterator_t const &>(_end), new_filter),
-				static_cast<base_iterator_t const &>(_end),
+				std::find_if(static_cast<base_iterator_t const &>(this->_begin), static_cast<base_iterator_t const &>(this->_end), new_filter),
+				static_cast<base_iterator_t const &>(this->_end),
 				new_filter);
 		}
 	};
@@ -455,8 +459,8 @@ namespace linq
 		auto select(Func const &next_loader) const noexcept
 		{
 			return Object<Iterator, void, Func, 3>(
-				static_cast<base_iterator_t const &>(_begin),
-				static_cast<base_iterator_t const &>(_end),
+				static_cast<base_iterator_t const &>(this->_begin),
+				static_cast<base_iterator_t const &>(this->_end),
 				next_loader);
 		}
 
@@ -464,8 +468,8 @@ namespace linq
 		auto where(Func const &next_filter) const noexcept
 		{
 			return Object<Iterator, Func, void, 2>(
-				std::find_if(static_cast<base_iterator_t const &>(_begin), static_cast<base_iterator_t const &>(_end), next_filter),
-				static_cast<base_iterator_t const &>(_end),
+				std::find_if(static_cast<base_iterator_t const &>(this->_begin), static_cast<base_iterator_t const &>(this->_end), next_filter),
+				static_cast<base_iterator_t const &>(this->_end),
 				next_filter);
 		}
 	};
@@ -489,3 +493,5 @@ namespace linq
 	}
 
 }
+
+#endif // LINQ_H_INCLUDED
