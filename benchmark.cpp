@@ -63,6 +63,12 @@ void bench()
 			.Where([](const auto &val) noexcept { return val > 5; })
 			.Sum();
 	});
+	auto x100 = test("->NotIEnumerable", [&]() {
+		return linq::from(data)
+			.select([](const auto &val) noexcept -> const auto & { return val.map[0];; })
+			.where([](const auto &val) noexcept { return val > 5; })
+			.sum();
+	});
 	auto x4 = test("->Legacy", [&]() {
 		int result = 0;
 		for (const auto &it : data)
@@ -239,11 +245,29 @@ void bench<user>()
 
 	auto x2 = test("->IEnumerable (OrderBy)", [&]() {
 		return linq::make_enumerable(data)
-			.Where([](const auto &val) noexcept { return val.groupId > 5; })
-			.OrderBy(
-				[](const auto &key) noexcept { return key.groupId; },
-				[](const auto &key) { return key.created; }).Desc();
+			.Where([](const auto &val) noexcept { return val.groupId > 6; })
+			.OrderBy(linq::asc([](const auto &key) noexcept  { return key.groupId; }));
 	});
+
+	auto x3 = test("->IEnumerable (OrderBy)", [&]() {
+		return linq::make_enumerable(data)
+			.Where([](const auto &val) noexcept { return val.groupId > 5; })
+			.Where([](const auto &val) noexcept { return val.groupId > 6; })
+			.OrderBy(
+				//[](const auto &key) noexcept { return key.groupId; },
+				linq::asc([](const auto &key) { return key.groupId; }),
+				linq::desc([](const auto &key) { return key.created; }))
+			.Where([](const auto &val) noexcept { return val.groupId > 7; })
+			.Select([](const auto &val) noexcept { return val.groupId; })
+			.Where([](const auto &val) noexcept { return val > 7; })
+			.Sum();
+	});
+
+	//auto x3 = test("->IEnumerable (OrderBy)", [&]() {
+	//	return linq::make_enumerable(data)
+	//		.Where([](const auto &val) noexcept { return val.groupId > 5; })
+	//		.OrderBy(linq::make_asc([](const auto &key) noexcept { return key.groupId; }));
+	//});
 
 	std::cout << std::endl;
 }
@@ -251,8 +275,8 @@ void bench<user>()
 int main(int argc, char *argv[])
 {
 	std::srand(time(0));
-	//std::cout << "# Light objects" << std::endl;
-	//bench<light>();
+	std::cout << "# Light objects" << std::endl;
+	bench<light>();
 
 	//std::cout << "# Heavy objects" << std::endl;
 	//bench<heavy>();

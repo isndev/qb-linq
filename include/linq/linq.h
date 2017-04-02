@@ -33,17 +33,7 @@ namespace linq
 		typedef std::map<Key, Value> type;
 	};
 
-	template<typename In>
-	struct group_by_f
-	{
-		typedef std::vector<typename std::remove_reference<In>::type> type;
-
-		inline static void emplace(type &vec, In const &val) noexcept
-		{
-			vec.push_back(val);
-		}
-	};
-	template<typename In, typename KeyLoader, typename... Funcs>
+	template<typename In, typename KeyLoader = void, typename... Funcs>
 	struct group_by
 	{
 		using Out = decltype(std::declval<KeyLoader>()(std::declval<In>()));
@@ -58,32 +48,95 @@ namespace linq
 	struct group_by<In, KeyLoader>
 	{
 		using Out = decltype(std::declval<KeyLoader>()(std::declval<In>()));
-		typedef typename map_type<Out, typename group_by_f<In>::type, std::is_fundamental<Out>::value>::type type;
+		typedef typename map_type<Out, typename group_by<In>::type, std::is_fundamental<Out>::value>::type type;
 
 		inline static void emplace(type &handle, In const &val, KeyLoader const &func) noexcept
 		{
-			group_by_f<In>::emplace(handle[func(val)], val);
+			group_by<In>::emplace(handle[func(val)], val);
+		}
+	};
+	template<typename In>
+	struct group_by<In>
+	{
+		typedef std::vector<typename std::remove_reference<In>::type> type;
+
+		inline static void emplace(type &vec, In const &val) noexcept
+		{
+			vec.push_back(val);
+		}
+	};
+
+	enum class order_type
+	{
+		asc,
+		desc
+	};
+	template<typename Key, order_type OrderType = order_type::asc>
+	struct order_by_modifier
+	{
+		typedef Key key_type;
+		static constexpr order_type ob_type = OrderType;
+
+		Key const &key_;
+		order_by_modifier(Key const &key) : key_(key) {}
+	};
+
+	template <typename Key>
+	auto const asc(Key const &key) noexcept { return std::move(order_by_modifier<Key, order_type::asc>(key)); }
+	template <typename Key>
+	auto const desc(Key const &key) noexcept { return std::move(order_by_modifier<Key, order_type::desc>(key)); }
+
+	template<typename In, typename Base>
+	struct order_by_modifier_end : public Base
+	{
+		static constexpr order_type type = Base::ob_type;
+
+		order_by_modifier_end() = delete;
+		~order_by_modifier_end() = default;
+		order_by_modifier_end(order_by_modifier_end const &) = default;
+		order_by_modifier_end(Base const &key) : Base(key.key_) {}
+		order_by_modifier_end(typename Base::key_type const &key) : Base(key) {}
+
+		auto operator()(In val) const noexcept { return /*std::forward<In &&>(*/this->key_(val)/*)*/; }
+
+	};
+
+
+	template<typename In, order_type OrderType>
+	struct order_by_less
+	{
+		inline bool operator()(const In a, const In b) const noexcept
+		{ 
+			return a < b;
+		}
+	};
+	template<typename In>
+	struct order_by_less<In, order_type::desc>
+	{
+		inline bool operator()(const In a, const In b) const  noexcept
+		{
+			return a > b;
 		}
 	};
 	template<typename In, typename Key1, typename Key2, typename... Keys>
-	inline bool order_by_next(In a, In b, Key1 const &key1, Key2 const &key2, Keys const &...keys) noexcept
+	inline bool order_by_next(In &a, In &b, Key1 const &key1, Key2 const &key2, Keys const &...keys) noexcept
 	{
-		return key1(a) == key1(b) && key2(a) < key2(b) || order_by_next(a, b, key2, keys...);
+		return (key1(a) == key1(b) && order_by_less<decltype(key2(a)), Key2::type>()(key2(a), key2(b))) || order_by_next(a, b, key2, keys...);
 	}
 	template<typename In, typename Key1, typename Key2>
-	inline bool order_by_next(In a, In b, Key1 const &key1, Key2 const &key2) noexcept
+	inline bool order_by_next(In &a, In &b, Key1 const &key1, Key2 const &key2) noexcept
 	{
-		return key1(a) == key1(b) && key2(a) < key2(b);
+		return key1(a) == key1(b) && order_by_less<decltype(key2(a)), Key2::type>()(key2(a), key2(b));
 	}
 	template<typename In, typename Key, typename... Keys>
-	inline bool order_by(In a, In b, Key const &key, Keys const &...keys) noexcept
+	inline bool order_by(In &a, In &b, Key const &key, Keys const &...keys) noexcept
 	{
-		return key(a) < key(b) || order_by_next(a, b, key, keys...);
+		return order_by_less<decltype(key(a)), Key::type>()(key(a), key(b)) || order_by_next(a, b, key, keys...);
 	}
 	template<typename In, typename Key>
-	inline bool order_by(In a, In b, Key const &key) noexcept
+	inline bool order_by(In &a, In &b, Key const &key) noexcept
 	{
-		return key(a) < key(b);
+		return order_by_less<decltype(key(a)), Key::type>()(key(a), key(b));
 	}
 
 	/*! utils */
@@ -237,10 +290,21 @@ namespace linq
 			: Base(base)
 		{}
 
+		inline Out operator*() const noexcept { return *static_cast<Base const &>(*this); }
+
+		inline iterator const &operator++() noexcept {
+			static_cast<Base &>(*this).operator++();
+			return *this;
+		}
+
 		iterator const &operator=(iterator const &rhs)
 		{
 			static_cast<Base &>(*this) = static_cast<Base const &>(rhs);
 			return (*this);
+		}
+
+		inline bool operator!=(iterator const &rhs) const noexcept {
+			return static_cast<Base const &>(*this) != static_cast<Base const &>(rhs);
 		}
 	};
 
@@ -535,7 +599,7 @@ namespace linq
 			{
 				return last_filter(value) && next_filter(value);
 			};
-			return Where<Iterator, Filter>(
+			return Where<Iterator, decltype(new_filter)>(
 				std::find_if(static_cast<base_iterator_t const &>(this->_begin), static_cast<base_iterator_t const &>(this->_end), new_filter),
 				static_cast<base_iterator_t const &>(this->_end),
 				new_filter);
@@ -662,7 +726,7 @@ namespace linq
 				next_filter);
 		}
 		template<typename... Funcs>
-		auto groupBy(Funcs... keys) const noexcept
+		auto groupBy(Funcs const &...keys) const noexcept
 		{
 			using group_type = group_by<Out, Funcs...>;
 			using map_out = typename group_type::type;
@@ -674,13 +738,15 @@ namespace linq
 			return GroupBy<typename map_out::iterator, decltype(result)>(result->begin(), result->end(), result);
 		}
 		template<typename... Funcs>
-		auto orderBy(Funcs... keys) const noexcept
+		auto orderBy(Funcs const &... keys) const noexcept
 		{
 			auto proxy = std::make_shared<std::vector<typename std::remove_reference<Out>::type>>();
-			std::copy(_begin, _end, std::back_inserter(*proxy));
+			//std::copy(_begin, _end, std::back_inserter(*proxy));
+			for (Out it : *this)
+				proxy->push_back(it);
 			std::sort(proxy->begin(), proxy->end(), [keys...](Out a, Out b) -> bool
 			{
-				return order_by(a, b, keys...);
+				return order_by(a, b, std::move(order_by_modifier_end<Out, Funcs>(keys))...);
 			});
 
 			return OrderBy<decltype(proxy->begin()), decltype(proxy)>(proxy->begin(), proxy->end(), proxy);
@@ -775,7 +841,18 @@ namespace linq
 			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).where(next_filter))>;
 			return ret_t(std::move(static_cast<Handle const &>(*this).where(next_filter)));
 		}
-
+		template<typename... Funcs>
+		inline auto GroupBy(Funcs const &...keys) const noexcept
+		{
+			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).groupBy(keys...))>;
+			return ret_t(std::move(static_cast<Handle const &>(*this).groupBy(keys...)));
+		}
+		template<typename... Funcs>
+		inline auto OrderBy(Funcs const &...keys) const noexcept
+		{
+			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).orderBy(keys...))>;
+			return ret_t(std::move(static_cast<Handle const &>(*this).orderBy(keys...)));
+		}
 		template<typename Func>
 		inline auto SkipWhile(Func const &func) const noexcept
 		{
@@ -784,33 +861,15 @@ namespace linq
 		}
 		// TakeWhile todo
 
-		template<typename... Funcs>
-		inline auto GroupBy(Funcs... keys) const noexcept
-		{
-			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).groupBy(keys...))>;
-			return ret_t(static_cast<Handle const &>(*this).groupBy(keys...));
-		}
-		template<typename... Funcs>
-		inline auto OrderBy(Funcs... keys) const noexcept
-		{
-			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).orderBy(keys...))>;
-			return ret_t(static_cast<Handle const &>(*this).orderBy(keys...));
-		}
 		inline auto Asc()
 		{
 			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).asc())>;
-			return ret_t(static_cast<Handle const &>(*this).asc());
+			return ret_t(std::move(static_cast<Handle const &>(*this).asc()));
 		}
 		inline auto Desc()
 		{
 			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).desc())>;
-			return ret_t(static_cast<Handle const &>(*this).desc());
-		}
-		template<typename Func>
-		inline auto ThenBy(Func const &key) const noexcept
-		{
-			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).thenBy(key))>;
-			return ret_t(static_cast<Handle const &>(*this).thenBy(key));
+			return ret_t(std::move(static_cast<Handle const &>(*this).desc()));
 		}
 
 		inline auto Skip(std::size_t offset) const noexcept
@@ -825,15 +884,15 @@ namespace linq
 		}
 		inline auto Min() const noexcept
 		{
-			return std::move(static_cast<Handle const &>(*this).min());
+			return static_cast<Handle const &>(*this).min();
 		}
 		inline auto Max() const noexcept
 		{
-			return std::move(static_cast<Handle const &>(*this).max());
+			return static_cast<Handle const &>(*this).max();
 		}
 		inline auto Sum() const noexcept
 		{
-			return std::move(static_cast<Handle const &>(*this).sum());
+			return static_cast<Handle const &>(*this).sum();
 		}
 		inline auto Count() const noexcept
 		{
@@ -841,11 +900,11 @@ namespace linq
 		}
 		inline const iterator_t begin() const noexcept
 		{
-			return std::move(static_cast<Handle const &>(*this).begin());
+			return static_cast<Handle const &>(*this).begin();
 		}
 		inline const iterator_t end() const noexcept
 		{
-			return std::move(static_cast<Handle const &>(*this).end());
+			return static_cast<Handle const &>(*this).end();
 		}
 
 		//template<typename OutProxy>
@@ -888,13 +947,11 @@ namespace linq
 	{
 		return std::move(linq::From<typename T::const_iterator>(std::begin(container), std::end(container)));
 	}
-
 	template<typename T>
 	auto from(T &container)
 	{
 		return std::move(linq::From<typename T::iterator>(std::begin(container), std::end(container)));
 	}
-
 	template<typename T>
 	auto range(T const &begin, T const &end)
 	{
