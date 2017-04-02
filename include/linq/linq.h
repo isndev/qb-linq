@@ -1,18 +1,14 @@
 #ifndef LINQ_H_INCLUDED
 #define LINQ_H_INCLUDED
 
-#include <iostream>
 #include <memory>
-#include <functional>
 #include <type_traits>
+#include <functional>
 #include <utility>
 #include <vector>
 #include <map>
 #include <unordered_map>
 #include <algorithm>
-
-//version without chevre
-//version only filter
 
 namespace linq
 {
@@ -69,6 +65,27 @@ namespace linq
 			group_by_f<In>::emplace(handle[func(val)], val);
 		}
 	};
+	template<typename In, typename Key1, typename Key2, typename... Keys>
+	inline bool order_by_next(In a, In b, Key1 const &key1, Key2 const &key2, Keys const &...keys) noexcept
+	{
+		return key1(a) == key1(b) && key2(a) < key2(b) || order_by_next(a, b, key2, keys...);
+	}
+	template<typename In, typename Key1, typename Key2>
+	inline bool order_by_next(In a, In b, Key1 const &key1, Key2 const &key2) noexcept
+	{
+		return key1(a) == key1(b) && key2(a) < key2(b);
+	}
+	template<typename In, typename Key, typename... Keys>
+	inline bool order_by(In a, In b, Key const &key, Keys const &...keys) noexcept
+	{
+		return key(a) < key(b) || order_by_next(a, b, key, keys...);
+	}
+	template<typename In, typename Key>
+	inline bool order_by(In a, In b, Key const &key) noexcept
+	{
+		return key(a) < key(b);
+	}
+
 	/*! utils */
 
 	/* iterator */
@@ -263,30 +280,50 @@ namespace linq
 			: base_t(begin, end), proxy_(proxy)
 		{}
 
-		//template<typename Func, bool is_basic = std::is_fundamental<decltype(std::declval<Func>()(std::declval<Out>()))>::value>
-		//auto thenBy(Func const &key) const noexcept
-		//{
-		//	using last_key_t = decltype(std::declval<last_map_t>().first);
-		//	using last_vector_t = decltype(std::declval<last_map_t>().second);
-		//	using last_value_t = decltype(*std::declval<last_vector_t>().begin());
-
-		//	using MapOut = std::map<last_key_t, std::map<decltype(key(std::declval<last_value_t>())), std::vector<typename std::remove_reference<last_value_t>::type>>>;
-
-		//	auto result = std::make_shared<MapOut>();
-
-		//	for (Out it : *proxy_)
-		//	{
-		//		for (last_value_t val : it.second)
-		//			(*result)[it.first][key(val)].push_back(val);
-		//	}
-
-		//	return GroupBy<typename MapOut::iterator, decltype(result)>(result->begin(), result->end(), result);
-		//}
-
 		inline auto &operator[](last_key_t const &key) const
 		{
 			return (*proxy_)[key];
 		}
+
+	};
+	//OrderBy
+	template<typename Iterator, typename Proxy>
+	class OrderBy : public base
+		<
+		OrderBy<Iterator, Proxy>,
+		Iterator,
+		decltype(*std::declval<Iterator>()),
+		iterator_type::basic
+		>
+	{
+
+	public:
+		using proxy_t = OrderBy<Iterator, Proxy>;
+		using Out = decltype(*std::declval<Iterator>());
+		using base_t = base<proxy_t, Iterator, Out, iterator_type::basic>;
+
+		using iterator_t = linq::iterator<proxy_t, Iterator, Out, iterator_type::basic>;
+
+		typedef iterator_t iterator;
+		typedef iterator_t const_iterator;
+
+	private:
+		Proxy proxy_;
+	public:
+
+		OrderBy() = delete;
+		OrderBy(OrderBy const &) = default;
+		OrderBy(Iterator const &begin, Iterator const &end, Proxy proxy)
+			: base_t(begin, end), proxy_(proxy)
+		{}
+
+		inline auto asc() const noexcept { return *this; }
+		inline auto desc() const noexcept { return OrderBy<decltype(proxy_->rbegin()), Proxy>(proxy_->rbegin(), proxy_->rend(), proxy_); }
+
+		//inline auto &operator[](last_key_t const &key) const
+		//{
+		//	return (*proxy_)[key];
+		//}
 
 	};
 	//SelectWhere
@@ -594,7 +631,7 @@ namespace linq
 		base() = delete;
 		~base() = default;
 		base(base const &rhs)
-			: 
+			:
 			_begin(rhs._begin, static_cast<Proxy const &>(*this)),
 			_end(rhs._end, static_cast<Proxy const &>(*this))
 		{}
@@ -612,59 +649,18 @@ namespace linq
 		auto select(Func const &next_loader) const noexcept
 		{
 			return Select<Base_It, Func>(
-					static_cast<Base_It const &>(this->_begin),
-					static_cast<Base_It const &>(this->_end),
-					next_loader);
+				static_cast<Base_It const &>(this->_begin),
+				static_cast<Base_It const &>(this->_end),
+				next_loader);
 		}
 		template<typename Func>
 		auto where(Func const &next_filter) const noexcept
 		{
 			return Where<Base_It, Func>(
-					std::find_if(static_cast<Base_It const &>(this->_begin), static_cast<Base_It const &>(this->_end), next_filter),
-					static_cast<Base_It const &>(this->_end),
-					next_filter);
+				std::find_if(static_cast<Base_It const &>(this->_begin), static_cast<Base_It const &>(this->_end), next_filter),
+				static_cast<Base_It const &>(this->_end),
+				next_filter);
 		}
-		
-		template<typename Func>
-		auto skipWhile(Func const &func) const noexcept
-		{
-			auto ret = _begin;
-			while(static_cast<Base_It const &>(ret) != static_cast<Base_It const &>(_end) && func(*ret))
-				++ret;
-			return From<iterator_t>(ret, _end);
-		}
-		auto skip(std::size_t offset) const noexcept
-		{
-			auto ret = _begin;
-			for (std::size_t i = 0; i < offset && ret != _end; ++ret, ++i);
-
-			return From<iterator_t>(ret, _end);
-		}
-
-		// todo takeWhile
-		auto take(std::size_t number) const
-		{
-			return Take<iterator_t>(_begin, _end, number);
-		}
-
-		//template<typename typename... Funcs>
-		//auto orderBy(Funcs... keys) const noexcept
-		//{
-		//	auto comp = [keys](Out a, Out b) -> bool
-		//	{
-		//		std:: keys(a, b)
-		//	}
-
-		//	using group_type = group_by<Out, Funcs...>;
-		//	using map_out = typename group_type::type;
-		//	auto result = std::make_shared<map_out>();
-
-		//	for (Out it : *this)
-		//		group_type::emplace(*result, it, keys...);
-
-		//	return GroupBy<typename map_out::iterator, decltype(result)>(result->begin(), result->end(), result);
-		//}
-
 		template<typename... Funcs>
 		auto groupBy(Funcs... keys) const noexcept
 		{
@@ -677,7 +673,38 @@ namespace linq
 
 			return GroupBy<typename map_out::iterator, decltype(result)>(result->begin(), result->end(), result);
 		}
+		template<typename... Funcs>
+		auto orderBy(Funcs... keys) const noexcept
+		{
+			auto proxy = std::make_shared<std::vector<typename std::remove_reference<Out>::type>>();
+			std::copy(_begin, _end, std::back_inserter(*proxy));
+			std::sort(proxy->begin(), proxy->end(), [keys...](Out a, Out b) -> bool
+			{
+				return order_by(a, b, keys...);
+			});
 
+			return OrderBy<decltype(proxy->begin()), decltype(proxy)>(proxy->begin(), proxy->end(), proxy);
+		}
+		template<typename Func>
+		auto skipWhile(Func const &func) const noexcept
+		{
+			auto ret = _begin;
+			while (static_cast<Base_It const &>(ret) != static_cast<Base_It const &>(_end) && func(*ret))
+				++ret;
+			return From<iterator_t>(ret, _end);
+		}
+		//todo takeWhile
+		auto skip(std::size_t offset) const noexcept
+		{
+			auto ret = _begin;
+			for (std::size_t i = 0; i < offset && ret != _end; ++ret, ++i);
+
+			return From<iterator_t>(ret, _end);
+		}
+		auto take(std::size_t number) const
+		{
+			return Take<iterator_t>(_begin, _end, number);
+		}
 		auto min() const noexcept
 		{
 			typename std::remove_const<typename std::remove_reference<decltype(*_begin)>::type>::type val(*_begin);
@@ -735,7 +762,7 @@ namespace linq
 		IEnumerable(IEnumerable const &) = default;
 		IEnumerable(Handle const &rhs)
 			: Handle(rhs) {}
-		
+
 		template<typename Func>
 		inline auto Select(Func const &next_loader) const noexcept
 		{
@@ -748,33 +775,37 @@ namespace linq
 			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).where(next_filter))>;
 			return ret_t(std::move(static_cast<Handle const &>(*this).where(next_filter)));
 		}
-		
+
 		template<typename Func>
 		inline auto SkipWhile(Func const &func) const noexcept
 		{
 			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).skipWhile(func))>;
 			return ret_t(std::move(static_cast<Handle const &>(*this).skipWhile(func)));
-		}		
-		// TakeWhile todo
-		
-		inline auto Skip(std::size_t offset) const noexcept
-		{
-			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).skip(offset))>;
-			return ret_t(std::move(static_cast<Handle const &>(*this).skip(offset)));
-		}		
-		inline auto Take(std::size_t limit) const noexcept
-		{
-			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).take(limit))>;
-			return ret_t(std::move(static_cast<Handle const &>(*this).take(limit)));
 		}
-		
+		// TakeWhile todo
+
 		template<typename... Funcs>
 		inline auto GroupBy(Funcs... keys) const noexcept
 		{
 			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).groupBy(keys...))>;
 			return ret_t(static_cast<Handle const &>(*this).groupBy(keys...));
 		}
-
+		template<typename... Funcs>
+		inline auto OrderBy(Funcs... keys) const noexcept
+		{
+			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).orderBy(keys...))>;
+			return ret_t(static_cast<Handle const &>(*this).orderBy(keys...));
+		}
+		inline auto Asc()
+		{
+			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).asc())>;
+			return ret_t(static_cast<Handle const &>(*this).asc());
+		}
+		inline auto Desc()
+		{
+			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).desc())>;
+			return ret_t(static_cast<Handle const &>(*this).desc());
+		}
 		template<typename Func>
 		inline auto ThenBy(Func const &key) const noexcept
 		{
@@ -782,6 +813,16 @@ namespace linq
 			return ret_t(static_cast<Handle const &>(*this).thenBy(key));
 		}
 
+		inline auto Skip(std::size_t offset) const noexcept
+		{
+			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).skip(offset))>;
+			return ret_t(std::move(static_cast<Handle const &>(*this).skip(offset)));
+		}
+		inline auto Take(std::size_t limit) const noexcept
+		{
+			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).take(limit))>;
+			return ret_t(std::move(static_cast<Handle const &>(*this).take(limit)));
+		}
 		inline auto Min() const noexcept
 		{
 			return std::move(static_cast<Handle const &>(*this).min());

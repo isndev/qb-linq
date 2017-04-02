@@ -23,12 +23,12 @@ struct light {
 	}
 };
 
-struct User
+struct user
 {
 	int groupId;
 	int created;
 
-	User() {
+	user() {
 		groupId = (int)(std::rand() * 1000.0 / RAND_MAX);
 		created = (int)(std::rand() * 10.0 / RAND_MAX);
 	}
@@ -191,7 +191,7 @@ void bench()
 			.Skip(40000)
 			.Take(160000)
 			.GroupBy([](const auto &key) -> auto { return key; }, [](const auto &key) -> auto { return key; })
-			.Select([](auto &pair) { 
+			.Select([](auto &pair) {
 			return linq::make_enumerable(pair.second[pair.first])
 				.Sum(); })
 			.Sum();
@@ -217,25 +217,32 @@ void bench()
 #include <unordered_map>
 
 template <>
-void bench<User>()
+void bench<user>()
 {
-	std::vector<User> data(200000);
+	std::vector<user> data(200000);
 
 	auto x0 = test("->IEnumerable (GroupBy)", [&]() {
 		return linq::make_enumerable(data)
-			.Where([](const auto &user) { return user.groupId < 5; })
-			.GroupBy([](const auto &key) -> auto { return key.groupId; },
-				[](const auto &key) -> auto { return key.created; });
-			//.ThenBy([](const auto &key) ->  auto { return key.created; }));
-			//.Select([](const auto &pair) { return linq::make_enumerable(pair.second.at(pair.first)).Sum(); })
-			//.Sum();
+			.Where([](const auto &val) noexcept { return val.groupId > 5; })
+			.GroupBy(
+				[](const auto &key) noexcept { return key.groupId; },
+				[](const auto &key) { return key.created; });
 	});
 
-	std::unordered_map<int, std::unordered_map<int, std::vector<User>>> group;
+	std::unordered_map<int, std::unordered_map<int, std::vector<user>>> group;
 	auto x1 = test("->Legacy (GroupBy)", [&]() {
 		for (const auto &it : data)
-			group[it.groupId][it.created].push_back(it);
+			if (it.groupId > 5)
+				group[it.groupId][it.created].push_back(it);
 		return 0;
+	});
+
+	auto x2 = test("->IEnumerable (OrderBy)", [&]() {
+		return linq::make_enumerable(data)
+			.Where([](const auto &val) noexcept { return val.groupId > 5; })
+			.OrderBy(
+				[](const auto &key) noexcept { return key.groupId; },
+				[](const auto &key) { return key.created; }).Desc();
 	});
 
 	std::cout << std::endl;
@@ -244,7 +251,6 @@ void bench<User>()
 int main(int argc, char *argv[])
 {
 	std::srand(time(0));
-
 	//std::cout << "# Light objects" << std::endl;
 	//bench<light>();
 
@@ -252,7 +258,7 @@ int main(int argc, char *argv[])
 	//bench<heavy>();
 
 	std::cout << "# User objects" << std::endl;
-	bench<User>();
+	bench<user>();
 
 	return EXIT_SUCCESS;
 }
