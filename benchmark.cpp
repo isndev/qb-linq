@@ -261,6 +261,7 @@ void bench<user>()
 				[](const auto &val) noexcept { return val.created; })
 			.Select([](const auto &val) noexcept { return std::get<0>(val); })
 			.Where([](const auto &val) noexcept { return val > 7; })
+			.All()
 			.Sum();
 	});
 

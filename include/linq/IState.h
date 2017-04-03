@@ -103,6 +103,14 @@ namespace linq
 		{
 			return Take<iterator_t>(_begin, _end, number);
 		}
+		auto all() const noexcept
+		{
+			using vec_out = typename std::vector<typename std::remove_const<typename std::remove_reference<Out>::type>::type>;
+			auto proxy = std::make_shared<vec_out>();
+			for (Out it : *this)
+				proxy->push_back(it);
+			return All<typename vec_out::iterator, decltype(proxy)>(proxy->begin(), proxy->end(), proxy);
+		}
 		auto min() const noexcept
 		{
 			typename std::remove_const<typename std::remove_reference<decltype(*_begin)>::type>::type val(*_begin);
@@ -134,14 +142,7 @@ namespace linq
 		}
 
 		template<typename OutContainer>
-		OutContainer to() const noexcept
-		{
-			OutContainer out;
-			std::copy(_begin, _end, std::back_inserter(out));
-			return std::move(out);
-		}
-		template<typename OutContainer>
-		inline void to(OutContainer &out) const noexcept
+		inline void dump(OutContainer &out) const noexcept
 		{
 			std::copy(_begin, _end, std::back_inserter(out));
 		}

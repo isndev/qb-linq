@@ -19,6 +19,7 @@ namespace linq
 	class IState;
 }
 
+# include "linq/All.h"
 # include "linq/GroupBy.h"
 # include "linq/OrderBy.h"
 # include "linq/SelectWhere.h"

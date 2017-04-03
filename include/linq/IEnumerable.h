@@ -75,6 +75,11 @@ namespace linq
 			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).take(limit))>;
 			return ret_t(std::move(static_cast<Handle const &>(*this).take(limit)));
 		}
+		inline auto All() const noexcept
+		{
+			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).all())>;
+			return ret_t(std::move(static_cast<Handle const &>(*this).all()));
+		}
 		inline auto Min() const noexcept
 		{
 			return std::move(static_cast<Handle const &>(*this).min());
