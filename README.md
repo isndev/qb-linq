@@ -2,6 +2,7 @@
 Simplified Linq for C++ !
 
 Supported operations:
+- All
 - Select
 - SelectMany
 - Where
@@ -12,7 +13,6 @@ Supported operations:
 - Sum, Min, Max
 
 Todo:
-- All
 - Range
 - Single, Last
 - TakeWhile
