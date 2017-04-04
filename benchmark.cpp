@@ -45,7 +45,7 @@ void bench()
 	std::cout << "Select.Sum" << std::endl;
 	auto x1 = test("->IEnumerable", [&]() {
 		return linq::make_enumerable(data)
-			.Select([](const auto &val) noexcept -> const auto & { return val.map[0];; })
+			.Select([](const auto &val) noexcept -> const auto & { return val.map[0]; })
 			.Sum();
 	});
 	auto x2 = test("->Legacy", [&]() {
@@ -54,7 +54,22 @@ void bench()
 			result += it.map[0];
 		return result;
 	});
+
+	auto x111 = test("->IEnumerable", [&]() {
+		return linq::make_enumerable(data)
+			.Take(1000)
+			.Select([](const auto &val) noexcept -> const auto & { return val.map[0]; })
+			.Sum();
+	});
+	auto x222 = test("->Legacy", [&]() {
+		int result = 0;
+		for (int i = 0; i < 1000; ++i)
+			result += data[i].map[0];
+		return result;
+	});
+
 	assertEquals(x1, x2);
+	assertEquals(x111, x222);
 
 	std::cout << "Select.Where.Sum" << std::endl;
 	auto x3 = test("->IEnumerable", [&]() {

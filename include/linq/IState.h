@@ -31,9 +31,9 @@ namespace linq
 		template<typename Func>
 		auto select(Func const &next_loader) const noexcept
 		{
-			return Select<Base_It, Func>(
-				static_cast<Base_It const &>(this->_begin),
-				static_cast<Base_It const &>(this->_end),
+			return Select<iterator_t, Func>(
+				this->_begin,
+				this->_end,
 				next_loader);
 		}
 		template<typename... Funcs>
@@ -44,17 +44,17 @@ namespace linq
 				return std::tuple<decltype(loaders(val))...>(loaders(val)...);
 			};
 
-			return Select<Base_It, decltype(next_loader)>(
-				static_cast<Base_It const &>(this->_begin),
-				static_cast<Base_It const &>(this->_end),
+			return Select<iterator_t, decltype(next_loader)>(
+				this->_begin,
+				this->_end,
 				next_loader);
 		}
 		template<typename Func>
 		auto where(Func const &next_filter) const noexcept
 		{
-			return Where<Base_It, Func>(
-				std::find_if(static_cast<Base_It const &>(this->_begin), static_cast<Base_It const &>(this->_end), next_filter),
-				static_cast<Base_It const &>(this->_end),
+			return Where<iterator_t, Func>(
+				std::find_if(this->_begin, this->_end, next_filter),
+				this->_end,
 				next_filter);
 		}
 		template<typename... Funcs>
@@ -87,7 +87,7 @@ namespace linq
 		auto skipWhile(Func const &func) const noexcept
 		{
 			auto ret = _begin;
-			while (static_cast<Base_It const &>(ret) != static_cast<Base_It const &>(_end) && func(*ret))
+			while (ret != _end && func(*ret))
 				++ret;
 			return From<iterator_t>(ret, _end);
 		}
