@@ -102,7 +102,7 @@ struct Test;
 template <>
 struct Test<int, from::Legacy, which::From>
 {
-	auto Test::operator()() const
+	auto operator()() const
 	{
 		Context<int> context;
 		auto &data = context.get();
@@ -226,7 +226,7 @@ struct Test<int, from::IEnumerable, which::Where>
 template <typename T>
 struct Test<T, from::Legacy, which::Select>
 {
-	auto Test::operator()() const
+	auto operator()() const
 	{
 		Context<T> context;
 		auto &data = context.get();
