@@ -31,8 +31,8 @@ namespace linq
 		friend iterator_t;
 
 		mutable std::size_t number_;
-		inline bool reach(Iterator const &) const { return number_ > 0; }
-		inline void incr(Iterator const &) const { --number_; }
+		inline bool reach(Iterator const &) const noexcept { return number_ > 0; }
+		inline void incr(Iterator const &) const noexcept { --number_; }
 
 	public:
 		Take() = delete;

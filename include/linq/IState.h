@@ -140,6 +140,10 @@ namespace linq
 			for (auto it = _begin; it != _end; ++it, ++number);
 			return number;
 		}
+		bool any() const noexcept
+		{
+			return _begin != _end;
+		}
 
 		template<typename OutContainer>
 		inline void dump(OutContainer &out) const noexcept

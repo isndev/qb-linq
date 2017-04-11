@@ -35,17 +35,17 @@ namespace linq
 	template<typename T>
 	auto make_enumerable(T const &container)
 	{
-		return IEnumerable<From<typename T::const_iterator>>(From<typename T::const_iterator>(std::begin(container), std::end(container)));
+		return std::move(IEnumerable<From<typename T::const_iterator>>(From<typename T::const_iterator>(std::begin(container), std::end(container))));
 	}
 	template<typename T>
 	auto make_enumerable(T &container)
 	{
-		return IEnumerable<From<typename T::iterator>>(From<typename T::iterator>(std::begin(container), std::end(container)));
+		return std::move(IEnumerable<From<typename T::iterator>>(From<typename T::iterator>(std::begin(container), std::end(container))));
 	}
 	template<typename T>
 	auto make_enumerable(T const &begin, T const &end)
 	{
-		return IEnumerable<From<T>>(From<T>(begin, end));
+		return std::move(IEnumerable<From<T>>(From<T>(begin, end)));
 	}
 
 	template<typename T>

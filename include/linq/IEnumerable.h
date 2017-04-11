@@ -54,12 +54,12 @@ namespace linq
 		}
 		// TakeWhile todo
 
-		inline auto Asc()
+		inline auto Asc() const noexcept
 		{
 			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).asc())>;
 			return ret_t(std::move(static_cast<Handle const &>(*this).asc()));
 		}
-		inline auto Desc()
+		inline auto Desc() const noexcept
 		{
 			using ret_t = IEnumerable<decltype(static_cast<Handle const &>(*this).desc())>;
 			return ret_t(std::move(static_cast<Handle const &>(*this).desc()));
@@ -95,6 +95,10 @@ namespace linq
 		inline auto Count() const noexcept
 		{
 			return std::move(static_cast<Handle const &>(*this).count());
+		}
+		inline bool Any() const noexcept
+		{
+			return static_cast<Handle const &>(*this).asc();
 		}
 		inline const iterator_t begin() const noexcept
 		{

@@ -300,6 +300,6 @@ int main(int, char *[])
 
 	std::cout << "# User objects" << std::endl;
 	bench<user>();
-
+	system("pause");
 	return EXIT_SUCCESS;
 }
