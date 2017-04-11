@@ -9,7 +9,7 @@ Supported operations:
 - OrderBy
 - GroupBy
 - Skip, SkipWhile, Take
-- Count
+- Count, Any
 - Sum, Min, Max
 
 Todo:
@@ -18,4 +18,4 @@ Todo:
 - TakeWhile
 - Concat
 - Distinct, Union, Intersect, Except
-- Any, All, Contains
+- Contains
