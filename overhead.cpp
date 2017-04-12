@@ -29,7 +29,7 @@ struct User
 
 enum class from
 {
-	Legacy,
+	Naive,
 	IEnumerable,
 };
 
@@ -100,13 +100,13 @@ template <typename T, from From, which type>
 struct Test;
 
 template <>
-struct Test<int, from::Legacy, which::From>
+struct Test<int, from::Naive, which::From>
 {
 	auto operator()() const
 	{
 		Context<int> context;
 		auto &data = context.get();
-		return test("Leg->From", [&]() {
+		return test("Naive->From", [&]() {
 			int result = 0;
 			for (const auto &it : data)
 				result += it;
@@ -121,20 +121,20 @@ struct Test<int, from::IEnumerable, which::From>
 	{
 		Context<int> context;
 		auto &data = context.get();
-		return test("Enu->From", [&]() {
+		return test("IEnum->From", [&]() {
 			return linq::make_enumerable(data)
 				.Sum();
 		});
 	}
 };
 template <>
-struct Test<int, from::Legacy, which::Take>
+struct Test<int, from::Naive, which::Take>
 {
 	auto operator()() const
 	{
 		Context<int> context;
 		auto &data = context.get();
-		return test("Leg->Take", [&]() {
+		return test("Naive->Take", [&]() {
 			int result = 0;
 			for (int i = 0; i < 100000; ++i)
 				result += data[i];
@@ -149,7 +149,7 @@ struct Test<int, from::IEnumerable, which::Take>
 	{
 		Context<int> context;
 		auto &data = context.get();
-		return test("Enu->Take", [&]() {
+		return test("IEnum->Take", [&]() {
 			return linq::make_enumerable(data)
 				.Take(100000)
 				.Sum();
@@ -157,13 +157,13 @@ struct Test<int, from::IEnumerable, which::Take>
 	}
 };
 template <>
-struct Test<int, from::Legacy, which::Skip>
+struct Test<int, from::Naive, which::Skip>
 {
 	auto operator()() const
 	{
 		Context<int> context;
 		auto &data = context.get();
-		return test("Leg->Skip", [&]() {
+		return test("Naive->Skip", [&]() {
 			int result = 0;
 			int i = 0;
 			for (const auto &it : data)
@@ -183,7 +183,7 @@ struct Test<int, from::IEnumerable, which::Skip>
 	{
 		Context<int> context;
 		auto &data = context.get();
-		return test("Enu->Skip", [&]() {
+		return test("IEnum->Skip", [&]() {
 			return linq::make_enumerable(data)
 				.Skip(100000)
 				.Sum();
@@ -191,13 +191,13 @@ struct Test<int, from::IEnumerable, which::Skip>
 	}
 };
 template <>
-struct Test<int, from::Legacy, which::Where>
+struct Test<int, from::Naive, which::Where>
 {
 	auto operator()() const
 	{
 		Context<int> context;
 		auto &data = context.get();
-		return test("Leg->Where", [&]() {
+		return test("Naive->Where", [&]() {
 			int result = 0;
 			for (const auto &it : data)
 			{
@@ -216,7 +216,7 @@ struct Test<int, from::IEnumerable, which::Where>
 	{
 		Context<int> context;
 		auto &data = context.get();
-		return test("Enu->Where", [&]() {
+		return test("IEnum->Where", [&]() {
 			return linq::make_enumerable(data)
 				.Where([](const auto &val) noexcept { return val > 1234; })
 				.Sum();
@@ -224,13 +224,13 @@ struct Test<int, from::IEnumerable, which::Where>
 	}
 };
 template <typename T>
-struct Test<T, from::Legacy, which::Select>
+struct Test<T, from::Naive, which::Select>
 {
 	auto operator()() const
 	{
 		Context<T> context;
 		auto &data = context.get();
-		return test("Leg->Select", [&]() {
+		return test("Naive->Select", [&]() {
 			int result = 0;
 			for (const auto &it : data)
 				result += std::get<0>(it);
@@ -245,7 +245,7 @@ struct Test<T, from::IEnumerable, which::Select>
 	{
 		Context<T> context;
 		auto &data = context.get();
-		return test("Enu->Select", [&]() {
+		return test("IEnum->Select", [&]() {
 			return linq::make_enumerable(data)
 				.Select([](const auto &val) noexcept -> const auto & { return std::get<0>(val); })
 				.Sum();
@@ -253,14 +253,14 @@ struct Test<T, from::IEnumerable, which::Select>
 	}
 };
 template <typename T>
-struct Test<T, from::Legacy, which::Take>
+struct Test<T, from::Naive, which::Take>
 {
 	auto operator()() const
 	{
 		Context<T> context;
 		auto &data = context.get();
 
-		return test("Leg->Select.Take", [&]() {
+		return test("Naive->Select.Take", [&]() {
 			int result = 0;
 			int i = 0;
 			for (const auto &it : data)
@@ -269,6 +269,7 @@ struct Test<T, from::Legacy, which::Take>
 				if (i < 100000)
 					result += val;
 				else break;
+				++i;
 			}
 			return result;
 		});
@@ -281,7 +282,7 @@ struct Test<T, from::IEnumerable, which::Take>
 	{
 		Context<T> context;
 		auto &data = context.get();
-		return test("Enu->Select.Take", [&]() {
+		return test("IEnum->Select.Take", [&]() {
 			return linq::make_enumerable(data)
 				.Select([](const auto &val) noexcept -> const auto & { return std::get<0>(val); })
 				.Take(100000)
@@ -290,14 +291,14 @@ struct Test<T, from::IEnumerable, which::Take>
 	}
 };
 template <typename T>
-struct Test<T, from::Legacy, which::Skip>
+struct Test<T, from::Naive, which::Skip>
 {
 	auto operator()() const
 	{
 		Context<T> context;
 		auto &data = context.get();
 
-		return test("Leg->Select.Skip", [&]() {
+		return test("Naive->Select.Skip", [&]() {
 			int result = 0;
 			int i = 0;
 			for (const auto &it : data)
@@ -318,7 +319,7 @@ struct Test<T, from::IEnumerable, which::Skip>
 	{
 		Context<T> context;
 		auto &data = context.get();
-		return test("Enu->Select.Skip", [&]() {
+		return test("IEnum->Select.Skip", [&]() {
 			return linq::make_enumerable(data)
 				.Select([](const auto &val) noexcept -> const auto & { return std::get<0>(val); })
 				.Skip(100000)
@@ -327,13 +328,13 @@ struct Test<T, from::IEnumerable, which::Skip>
 	}
 };
 template <typename T>
-struct Test<T, from::Legacy, which::Where>
+struct Test<T, from::Naive, which::Where>
 {
 	auto operator()() const
 	{
 		Context<T> context;
 		auto &data = context.get();
-		return test("Leg->Select.Where", [&]() {
+		return test("Naive->Select.Where", [&]() {
 			int result = 0;
 			for (const auto &it : data)
 			{
@@ -352,7 +353,7 @@ struct Test<T, from::IEnumerable, which::Where>
 	{
 		Context<T> context;
 		auto &data = context.get();
-		return test("Enu->Select.Where", [&]() {
+		return test("IEnum->Select.Where", [&]() {
 			return linq::make_enumerable(data)
 				.Select([](const auto &val) noexcept -> const auto & { return std::get<0>(val); })
 				.Where([](const auto &val) noexcept { return val > 1234; })
@@ -361,15 +362,52 @@ struct Test<T, from::IEnumerable, which::Where>
 	}
 };
 
+template <>
+struct Test<User, from::Naive, which::SelectMany>
+{
+	auto operator()() const
+	{
+		Context<User> context;
+		auto &data = context.get();
+		return test("Naive->SelectMany", [&]() {
+			int result = 0;
+			for (const auto &it : data)
+			{
+				std::tuple<int, int, int, int> tupl(it.group, it.category, it.likes, it.visits);
+				result += std::get<0>(tupl);
+			}
+			return result;
+		});
+	}
+};
+template <>
+struct Test<User, from::IEnumerable, which::SelectMany>
+{
+	auto operator()() const
+	{
+		Context<User> context;
+		auto &data = context.get();
+		return test("IEnum->SelectMany", [&]() {
+			return linq::make_enumerable(data)
+				.SelectMany(
+					[](const auto &key) noexcept { return key.group; },
+					[](const auto &key) noexcept { return key.category; },
+					[](const auto &key) noexcept { return key.likes; },
+					[](const auto &key) noexcept { return key.visits; })
+				.Select([](const auto &tupl) noexcept { return std::get<0>(tupl); })
+				.Sum();
+		});
+	}
+};
 template<>
-struct Test<User, from::Legacy, which::GroupBy>
+struct Test<User, from::Naive, which::GroupBy>
 {
 	auto operator()() const
 	{
 		Context<User> context;
 		auto &data = context.get();
 
-		return test("Leg->GroupBy", [&]() {
+		return test("Naive->GroupBy", [&]() {
 			std::unordered_map<int, std::unordered_map<int, std::vector<User>>> groups;
 			for (const auto &it : data)
 				groups[it.group][it.category].push_back(it);
@@ -384,7 +422,7 @@ struct Test<User, from::IEnumerable, which::GroupBy>
 	{
 		Context<User> context;
 		auto &data = context.get();
-		return test("Enu->GroupBy", [&]() {
+		return test("IEnum->GroupBy", [&]() {
 			linq::make_enumerable(data)
 				.GroupBy(
 					[](const auto &key) noexcept { return key.group; },
@@ -394,14 +432,14 @@ struct Test<User, from::IEnumerable, which::GroupBy>
 	}
 };
 template<>
-struct Test<User, from::Legacy, which::OrderBy>
+struct Test<User, from::Naive, which::OrderBy>
 {
 	auto operator()() const
 	{
 		Context<User> context;
 		auto &data = context.get();
 
-		return test("Leg->OrderBy", [&]() noexcept {
+		return test("Naive->OrderBy", [&]() noexcept {
 			std::sort(data.begin(), data.end(), [](User const &l, User const &r)
 			{
 				return l.group < r.group || //asc
@@ -420,7 +458,7 @@ struct Test<User, from::IEnumerable, which::OrderBy>
 	{
 		Context<User> context;
 		auto &data = context.get();
-		return test("Enu->OrderBy", [&]() {
+		return test("IEnum->OrderBy", [&]() {
 			linq::make_enumerable(data)
 				.OrderBy(
 					linq::asc([](const auto &key) noexcept { return key.group; }),
@@ -435,35 +473,26 @@ struct Test<User, from::IEnumerable, which::OrderBy>
 
 
 
-void bench()
+void executeTests()
 {
-	Test<int, from::Legacy, which::From>()();
-	Test<int, from::IEnumerable, which::From>()();
-	Test<int, from::Legacy, which::Take>()();
-	Test<int, from::IEnumerable, which::Take>()();
-	Test<int, from::Legacy, which::Skip>()();
-	Test<int, from::IEnumerable, which::Skip>()();
-	Test<int, from::Legacy, which::Where>()();
-	Test<int, from::IEnumerable, which::Where>()();
-	Test<Object, from::Legacy, which::Select>()();
-	Test<Object, from::IEnumerable, which::Select>()();
-	Test<Object, from::Legacy, which::Take>()();
-	Test<Object, from::IEnumerable, which::Take>()();
-	Test<Object, from::Legacy, which::Skip>()();
-	Test<Object, from::IEnumerable, which::Skip>()();
-	Test<Object, from::Legacy, which::Where>()();
-	Test<Object, from::IEnumerable, which::Where>()();
-	Test<User, from::Legacy, which::GroupBy>()();
-	Test<User, from::IEnumerable, which::GroupBy>()();
-	Test<User, from::Legacy, which::OrderBy>()();
-	Test<User, from::IEnumerable, which::OrderBy>()();
+	assertEquals(Test<int, from::Naive, which::From>()(), Test<int, from::IEnumerable, which::From>()());
+	assertEquals(Test<int, from::Naive, which::Take>()(), Test<int, from::IEnumerable, which::Take>()());
+	assertEquals(Test<int, from::Naive, which::Skip>()(), Test<int, from::IEnumerable, which::Skip>()());
+	assertEquals(Test<int, from::Naive, which::Where>()(), Test<int, from::IEnumerable, which::Where>()());
+	assertEquals(Test<Object, from::Naive, which::Select>()(), Test<Object, from::IEnumerable, which::Select>()());
+	assertEquals(Test<Object, from::Naive, which::Take>()(), Test<Object, from::IEnumerable, which::Take>()());
+	assertEquals(Test<Object, from::Naive, which::Skip>()(), Test<Object, from::IEnumerable, which::Skip>()());
+	assertEquals(Test<Object, from::Naive, which::Where>()(), Test<Object, from::IEnumerable, which::Where>()());
+	assertEquals(Test<User, from::Naive, which::SelectMany>()(), Test<User, from::IEnumerable, which::SelectMany>()());
+	assertEquals(Test<User, from::Naive, which::GroupBy>()(), Test<User, from::IEnumerable, which::GroupBy>()());
+	assertEquals(Test<User, from::Naive, which::OrderBy>()(), Test<User, from::IEnumerable, which::OrderBy>()());
 }
 
 int main(int, char *[])
 {
 	std::srand(time(0));
 	std::cout << "# Overhead Tests" << std::endl;
-	bench();
+	executeTests();
 
 	system("pause");
 	return EXIT_SUCCESS;
