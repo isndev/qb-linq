@@ -18,10 +18,10 @@ namespace linq
 		using Out = decltype(*std::declval<Iterator>());
 		using base_t = IState<proxy_t, Iterator, Out, iterator_type::basic>;
 
-		using iterator_t = linq::iterator<proxy_t, Iterator, Out, iterator_type::basic>;
+		using iterator_type = linq::iterator<proxy_t, Iterator, Out, iterator_type::basic>;
 
-		typedef iterator_t iterator;
-		typedef iterator_t const_iterator;
+		typedef iterator_type iterator;
+		typedef iterator_type const_iterator;
 
 	private:
 		Proxy proxy_;

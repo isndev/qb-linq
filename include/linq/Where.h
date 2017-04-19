@@ -20,13 +20,13 @@ namespace linq
 
 		using proxy_t = Where<Iterator, Filter>;
 		using base_t = IState<proxy_t, base_iterator_t, Out, iterator_type::filter>;
-		using iterator_t = linq::iterator<proxy_t, base_iterator_t, Out, iterator_type::filter>;
+		using iterator_type = linq::iterator<proxy_t, base_iterator_t, Out, iterator_type::filter>;
 
-		typedef iterator_t iterator;
-		typedef iterator_t const_iterator;
+		typedef iterator_type iterator;
+		typedef iterator_type const_iterator;
 
 	private:
-		friend iterator_t;
+		friend iterator_type;
 		Filter const _filter;
 
 		inline bool validate(base_iterator_t const &it) const noexcept

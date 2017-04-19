@@ -10,7 +10,7 @@ export	CPP-5		=	g++-5
 export	CPP-6		=	g++-6
 export	CLANG		=	clang++
 export	CC		=	gcc
-export	CXX		=	$(CPP)
+export	CXX		=	$(CPP-5)
 
 export	CXXFLAGS	= 	-std=c++14 -W -Wall -Wextra -I./include/ -I./ $(DFLAGS)
 export	CFLAGSEXT	= 	-I./include -I./ $(DFLAGS)
@@ -29,6 +29,6 @@ fclean	: clean
 re	: fclean all
 
 $(NAME): $(OBJ)
-	$(CXX) $(OBJ) -o $(NAME) $(CFLAGSEXT)
+	$(CXX) $(CXXFLAGS) $(OBJ) -o $(NAME) $(CFLAGSEXT)
 run:
 	./$(NAME)

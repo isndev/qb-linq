@@ -23,12 +23,12 @@ namespace linq
 			Out,
 			iterator_type::reach
 			>;
-		using iterator_t = linq::iterator<proxy_t, Iterator, Out, iterator_type::reach>;
+		using iterator_type = linq::iterator<proxy_t, Iterator, Out, iterator_type::reach>;
 
-		typedef iterator_t iterator;
-		typedef iterator_t const_iterator;
+		typedef iterator_type iterator;
+		typedef iterator_type const_iterator;
 	private:
-		friend iterator_t;
+		friend iterator_type;
 
 		mutable std::size_t number_;
 		inline bool reach(Iterator const &) const noexcept { return number_ > 0; }

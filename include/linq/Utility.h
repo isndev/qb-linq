@@ -4,7 +4,7 @@
 namespace linq
 {
 	/* utils */
-	enum class iterator_type
+	enum class eIteratorType
 	{
 		basic,
 		reach,

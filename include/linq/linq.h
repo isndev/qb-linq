@@ -15,17 +15,17 @@
 
 namespace linq
 {
-	template<typename Proxy, typename Base_It, typename Out, iterator_type ItType>
+	template<typename Proxy, typename Base_It, typename Out, eIteratorType ItType>
 	class IState;
 }
 
-# include "linq/All.h"
-# include "linq/GroupBy.h"
-# include "linq/OrderBy.h"
-# include "linq/SelectWhere.h"
-# include "linq/Select.h"
-# include "linq/Where.h"
-# include "linq/Take.h"
+//# include "linq/All.h"
+//# include "linq/GroupBy.h"
+//# include "linq/OrderBy.h"
+//# include "linq/SelectWhere.h"
+//# include "linq/Select.h"
+//# include "linq/Where.h"
+//# include "linq/Take.h"
 # include "linq/From.h"
 # include "linq/IState.h"
 # include "linq/IEnumerable.h"

@@ -19,12 +19,12 @@ namespace linq
 
 		using proxy_t = Select<Iterator, Loader>;
 		using base_t = IState<proxy_t, base_iterator_t, Out, iterator_type::load>;
-		using iterator_t = linq::iterator<proxy_t, base_iterator_t, Out, iterator_type::load>;
+		using iterator_type = linq::iterator<proxy_t, base_iterator_t, Out, iterator_type::load>;
 
-		typedef iterator_t iterator;
-		typedef iterator_t const_iterator;
+		typedef iterator_type iterator;
+		typedef iterator_type const_iterator;
 	private:
-		friend iterator_t;
+		friend iterator_type;
 		Loader const _loader;
 
 		inline Out load(base_iterator_t const &it) const noexcept

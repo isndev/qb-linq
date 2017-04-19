@@ -3,130 +3,133 @@
 
 namespace linq
 {
-	template<typename Proxy, typename Base_It, typename Out, iterator_type ItType>
+	template<typename Base_It, typename Trait_It, typename Out, eIteratorType it_type>
 	class IState
 	{
-		using iterator_t = iterator<Proxy, Base_It, Out, ItType>;
+	public:
+		using iterator_type = iterator<Base_It, Trait_It, Out, it_type>;
+		using iterator_trait = Trait_It;
+
 	protected:
-		iterator_t const _begin;
-		iterator_t const _end;
+		iterator_type const _begin;
+		iterator_type const _end;
 	public:
 		IState() = delete;
 		~IState() = default;
 		IState(IState const &rhs)
 			:
-			_begin(rhs._begin, static_cast<Proxy const &>(*this)),
-			_end(rhs._end, static_cast<Proxy const &>(*this))
+			_begin(rhs._begin),
+			_end(rhs._end)
 		{}
-		IState(Base_It const &begin, Base_It const &end)
+		IState(Base_It const &begin, Base_It const &end, iterator_trait const &&it_trait)
 			:
-			_begin(begin, static_cast<Proxy const &>(*this)),
-			_end(end, static_cast<Proxy const &>(*this))
+			_begin(begin, it_trait),
+			_end(end, it_trait)
 		{}
 
-		inline iterator_t const begin() const noexcept { return _begin; }
-		inline iterator_t const end() const noexcept { return _end; }
+		inline iterator_type const begin() const noexcept { return _begin; }
+		inline iterator_type const end() const noexcept { return _end; }
 
 
-		template<typename Func>
-		auto select(Func const &next_loader) const noexcept
-		{
-			return Select<iterator_t, Func>(
-				this->_begin,
-				this->_end,
-				next_loader);
-		}
-		template<typename... Funcs>
-		auto selectMany(Funcs const &...loaders) const noexcept
-		{
-			auto const &next_loader = [loaders...] (Out val)
-			{
-				return std::tuple<decltype(loaders(val))...>(loaders(val)...);
-			};
+		//template<typename Func>
+		//auto select(Func const &next_loader) const noexcept
+		//{
+		//	return Select<iterator_type, Func>(
+		//		this->_begin,
+		//		this->_end,
+		//		next_loader);
+		//}
+		//template<typename... Funcs>
+		//auto selectMany(Funcs const &...loaders) const noexcept
+		//{
+		//	auto const &next_loader = [loaders...] (Out val)
+		//	{
+		//		return std::tuple<decltype(loaders(val))...>(loaders(val)...);
+		//	};
 
-			return Select<iterator_t, decltype(next_loader)>(
-				this->_begin,
-				this->_end,
-				next_loader);
-		}
-		template<typename Func>
-		auto where(Func const &next_filter) const noexcept
-		{
-			return Where<iterator_t, Func>(
-				std::find_if(this->_begin, this->_end, next_filter),
-				this->_end,
-				next_filter);
-		}
-		template<typename... Funcs>
-		auto groupBy(Funcs const &...keys) const noexcept
-		{
-			using group_type = group_by<Out, Funcs...>;
-			using map_out = typename group_type::type;
-			auto result = std::make_shared<map_out>();
+		//	return Select<iterator_type, decltype(next_loader)>(
+		//		this->_begin,
+		//		this->_end,
+		//		next_loader);
+		//}
+		//template<typename Func>
+		//auto where(Func const &next_filter) const noexcept
+		//{
+		//	return Where<iterator_type, Func>(
+		//		std::find_if(this->_begin, this->_end, next_filter),
+		//		this->_end,
+		//		next_filter);
+		//}
+		//template<typename... Funcs>
+		//auto groupBy(Funcs const &...keys) const noexcept
+		//{
+		//	using group_type = group_by<Out, Funcs...>;
+		//	using map_out = typename group_type::type;
+		//	auto result = std::make_shared<map_out>();
 
-			for (Out it : *this)
-				group_type::emplace(*result, it, keys...);
+		//	for (Out it : *this)
+		//		group_type::emplace(*result, it, keys...);
 
-			return GroupBy<typename map_out::iterator, decltype(result)>(result->begin(), result->end(), result);
-		}
-		template<typename... Funcs>
-		auto orderBy(Funcs const &... keys) const noexcept
-		{
-			auto proxy = std::make_shared<std::vector<typename std::remove_reference<Out>::type>>();
-			//std::copy(_begin, _end, std::back_inserter(*proxy));
-			for (Out it : *this)
-				proxy->push_back(it);
-			std::sort(proxy->begin(), proxy->end(), [keys...](Out a, Out b) -> bool
-			{
-				return order_by(a, b, std::move(order_by_modifier_end<Out, Funcs>(keys))...);
-			});
+		//	return GroupBy<typename map_out::iterator, decltype(result)>(result->begin(), result->end(), result);
+		//}
+		//template<typename... Funcs>
+		//auto orderBy(Funcs const &... keys) const noexcept
+		//{
+		//	auto proxy = std::make_shared<std::vector<typename std::remove_reference<Out>::type>>();
+		//	//std::copy(_begin, _end, std::back_inserter(*proxy));
+		//	for (Out it : *this)
+		//		proxy->push_back(it);
+		//	std::sort(proxy->begin(), proxy->end(), [keys...](Out a, Out b) -> bool
+		//	{
+		//		return order_by(a, b, std::move(order_by_modifier_end<Out, Funcs>(keys))...);
+		//	});
 
-			return OrderBy<decltype(proxy->begin()), decltype(proxy)>(proxy->begin(), proxy->end(), proxy);
-		}
-		template<typename Func>
-		auto skipWhile(Func const &func) const noexcept
-		{
-			auto ret = _begin;
-			while (ret != _end && func(*ret))
-				++ret;
-			return From<iterator_t>(ret, _end);
-		}
-		//todo takeWhile
-		auto skip(std::size_t offset) const noexcept
-		{
-			auto ret = _begin;
-			for (std::size_t i = 0; i < offset && ret != _end; ++ret, ++i);
+		//	return OrderBy<decltype(proxy->begin()), decltype(proxy)>(proxy->begin(), proxy->end(), proxy);
+		//}
+		//template<typename Func>
+		//auto skipWhile(Func const &func) const noexcept
+		//{
+		//	auto ret = _begin;
+		//	while (ret != _end && func(*ret))
+		//		++ret;
+		//	return From<iterator_type>(ret, _end);
+		//}
+		////todo takeWhile
+		//auto skip(std::size_t offset) const noexcept
+		//{
+		//	auto ret = _begin;
+		//	for (std::size_t i = 0; i < offset && ret != _end; ++ret, ++i);
 
-			return From<iterator_t>(ret, _end);
-		}
-		auto take(std::size_t number) const
-		{
-			return Take<iterator_t>(_begin, _end, number);
-		}
-		auto all() const noexcept
-		{
-			using vec_out = typename std::vector<typename std::remove_const<typename std::remove_reference<Out>::type>::type>;
-			auto proxy = std::make_shared<vec_out>();
-			for (Out it : *this)
-				proxy->push_back(it);
-			return All<typename vec_out::iterator, decltype(proxy)>(proxy->begin(), proxy->end(), proxy);
-		}
-		auto min() const noexcept
-		{
-			typename std::remove_const<typename std::remove_reference<decltype(*_begin)>::type>::type val(*_begin);
-			for (Out it : *this)
-				if (it > val)
-					val = it;
-			return val;
-		}
-		auto max() const noexcept
-		{
-			typename std::remove_const<typename std::remove_reference<decltype(*_begin)>::type>::type val(*_begin);
-			for (Out it : *this)
-				if (it < val)
-					val = it;
-			return val;
-		}
+		//	return From<iterator_type>(ret, _end);
+		//}
+		//auto take(std::size_t number) const
+		//{
+		//	return Take<iterator_type>(_begin, _end, number);
+		//}
+		//auto all() const noexcept
+		//{
+		//	using vec_out = typename std::vector<typename std::remove_const<typename std::remove_reference<Out>::type>::type>;
+		//	auto proxy = std::make_shared<vec_out>();
+		//	for (Out it : *this)
+		//		proxy->push_back(it);
+		//	return All<typename vec_out::iterator, decltype(proxy)>(proxy->begin(), proxy->end(), proxy);
+		//}
+		//auto min() const noexcept
+		//{
+		//	typename std::remove_const<typename std::remove_reference<decltype(*_begin)>::type>::type val(*_begin);
+		//	for (Out it : *this)
+		//		if (it > val)
+		//			val = it;
+		//	return val;
+		//}
+		//auto max() const noexcept
+		//{
+		//	typename std::remove_const<typename std::remove_reference<decltype(*_begin)>::type>::type val(*_begin);
+		//	for (Out it : *this)
+		//		if (it < val)
+		//			val = it;
+		//	return val;
+		//}
 		auto sum() const noexcept
 		{
 			typename std::remove_const<typename std::remove_reference<decltype(*_begin)>::type>::type result{};
@@ -134,22 +137,22 @@ namespace linq
 				result += it;
 			return result;
 		}
-		auto count() const noexcept
-		{
-			std::size_t number{ 0 };
-			for (auto it = _begin; it != _end; ++it, ++number);
-			return number;
-		}
-		bool any() const noexcept
-		{
-			return _begin != _end;
-		}
+		//auto count() const noexcept
+		//{
+		//	std::size_t number{ 0 };
+		//	for (auto it = _begin; it != _end; ++it, ++number);
+		//	return number;
+		//}
+		//bool any() const noexcept
+		//{
+		//	return _begin != _end;
+		//}
 
-		template<typename OutContainer>
-		inline void dump(OutContainer &out) const noexcept
-		{
-			std::copy(_begin, _end, std::back_inserter(out));
-		}
+		//template<typename OutContainer>
+		//inline void dump(OutContainer &out) const noexcept
+		//{
+		//	std::copy(_begin, _end, std::back_inserter(out));
+		//}
 
 	};
 }
