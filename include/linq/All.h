@@ -1,43 +1,54 @@
 #ifndef ALL_H_
+# define ALL_H_
 
 namespace linq
 {
-	template<typename Iterator, typename Proxy>
-	class All : public IState
-		<
-		All<Iterator, Proxy>,
-		Iterator,
-		decltype(*std::declval<Iterator>()),
-		iterator_type::basic
-		>
-	{
-
+	template <typename Base, typename Proxy>
+	class all_it : public Base {
 	public:
-		using proxy_t = All<Iterator, Proxy>;
-		using Out = decltype(*std::declval<Iterator>());
-		using base_t = IState<proxy_t, Iterator, Out, iterator_type::basic>;
+		typedef Base iterator;
+		typedef decltype(*std::declval<Base>()) out;
 
-		using iterator_type = linq::iterator<proxy_t, Iterator, Out, iterator_type::basic>;
+		all_it() = delete;
+		all_it(all_it const &) = default;
+		all_it(Base const &base, Proxy proxy) noexcept(true)
+			: Base(base), _proxy(proxy) {}
 
-		typedef iterator_type iterator;
-		typedef iterator_type const_iterator;
+		auto const &operator=(all_it const &rhs) noexcept(true) {
+			static_cast<Base>(*this) = static_cast<Base const &>(rhs);
+		}
+	
+	private:
+		Proxy _proxy;
+	};
+
+	template<typename BaseIt, typename Proxy>
+	class All : public IState<all_it<BaseIt, Proxy>>{
+	public:
+		typedef all_it<BaseIt, Proxy> iterator;
+		typedef iterator const_iterator;
+
+		using base_t = IState<iterator>;
+	public:
+		~All() = default;
+		All() = delete;
+		All(All const &) = default;
+		All(BaseIt const &begin, BaseIt const &end, Proxy proxy)
+			: base_t(iterator(begin, proxy), iterator(end, proxy)), proxy_(proxy) {}
+
+		inline auto asc() const noexcept(true) { return *this; }
+		inline auto desc() const noexcept(true) {
+			return All<decltype(proxy_->rbegin()), Proxy>(proxy_->rbegin(), proxy_->rend(), proxy_);
+		}
+
+		template<typename Key>
+		inline auto &operator[](Key const &key) const {
+			return (*proxy_).at(key);
+		}
 
 	private:
 		Proxy proxy_;
-	public:
-
-		All() = delete;
-		All(All const &) = default;
-		All(Iterator const &begin, Iterator const &end, Proxy proxy)
-			: base_t(begin, end), proxy_(proxy)
-		{}
-
-		inline auto &operator[](int const index) const
-		{
-			return (*proxy_)[index];
-		}
-
 	};
 }
 
-#endif // !ALL_H_
+#endif // !All_H_

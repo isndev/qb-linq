@@ -10,7 +10,7 @@ export	CPP-5		=	g++-5
 export	CPP-6		=	g++-6
 export	CLANG		=	clang++
 export	CC		=	gcc
-export	CXX		=	$(CPP-5)
+export	CXX		=	$(CPP)
 
 export	CXXFLAGS	= 	-std=c++14 -W -Wall -Wextra -I./include/ -I./ $(DFLAGS)
 export	CFLAGSEXT	= 	-I./include -I./ $(DFLAGS)

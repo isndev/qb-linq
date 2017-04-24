@@ -3,70 +3,47 @@
 
 namespace linq
 {
-	template<typename Iterator, typename Filter>
-	class Where
-		: public IState
-		<
-		Where<Iterator, Filter>,
-		Iterator,
-		decltype(*std::declval<Iterator>()),
-		iterator_type::filter
-		>
-	{
+	template <typename Base, typename Filter>
+	class where_it : public Base {
 	public:
-		using base_iterator_t = Iterator;
-		using value_type = decltype(*std::declval<Iterator>());
-		using Out = decltype(*std::declval<Iterator>());
+		typedef Base base;
+		typedef decltype(*std::declval<Base>()) out;
 
-		using proxy_t = Where<Iterator, Filter>;
-		using base_t = IState<proxy_t, base_iterator_t, Out, iterator_type::filter>;
-		using iterator_type = linq::iterator<proxy_t, base_iterator_t, Out, iterator_type::filter>;
-
-		typedef iterator_type iterator;
-		typedef iterator_type const_iterator;
+		where_it() = delete;
+		where_it(where_it const &) = default;
+		where_it(Base const &base, Base const &end, Filter const &filter) noexcept(true)
+			: Base(base), _end(end), _filter(filter) {}
+		
+		inline auto const &operator=(where_it const &rhs) noexcept(true) {
+			static_cast<Base>(*this) = static_cast<Base const &>(rhs);
+			return *this;
+		}
+		inline auto const &operator++() noexcept(true) {
+			do
+			{
+				static_cast<Base &>(*this).operator++();
+			} while (static_cast<Base const &>(*this) != _end && !_filter(*static_cast<Base const &>(*this)));
+			return *this;
+		}
 
 	private:
-		friend iterator_type;
+		Base const _end;
 		Filter const _filter;
+	};
 
-		inline bool validate(base_iterator_t const &it) const noexcept
-		{
-			return
-				it != static_cast<base_iterator_t const &>(this->_end)
-				&& !_filter(*it);
-		}
-
+	template<typename BaseIt, typename Filter>
+	class Where : public IState<where_it<BaseIt, Filter>> {
 	public:
-		Where() = delete;
+		typedef where_it<BaseIt, Filter> iterator;
+		typedef iterator const_iterator;
+
+		using base_t = IState<iterator>;
+	public:
 		~Where() = default;
+		Where() = delete;
 		Where(Where const &) = default;
-		Where(base_iterator_t const &begin, base_iterator_t const &end, Filter const &filter)
-			: base_t(begin, end), _filter(filter)
-		{}
-
-		template<typename Func>
-		auto select(Func const &next_loader) const noexcept
-		{
-			return SelectWhere<Iterator, Filter, decltype(next_loader)>(
-				static_cast<base_iterator_t const &>(this->_begin),
-				static_cast<base_iterator_t const &>(this->_end),
-				_filter,
-				next_loader);
-		}
-
-		template<typename Func>
-		auto where(Func const &next_filter) const noexcept
-		{
-			const auto &last_filter = _filter;
-			const auto &new_filter = [last_filter, next_filter](value_type value) noexcept -> bool
-			{
-				return last_filter(value) && next_filter(value);
-			};
-			return Where<Iterator, decltype(new_filter)>(
-				std::find_if(static_cast<base_iterator_t const &>(this->_begin), static_cast<base_iterator_t const &>(this->_end), new_filter),
-				static_cast<base_iterator_t const &>(this->_end),
-				new_filter);
-		}
+		Where(BaseIt const &begin, BaseIt const &end, Filter const &filter) noexcept(true)
+			: base_t(iterator(begin, end, filter), iterator(end, end, filter)) {}
 	};
 }
 
