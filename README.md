@@ -42,7 +42,8 @@ Windows
 - Where
 - OrderBy
 - GroupBy
-- Skip, SkipWhile, Take
+- Skip, SkipWhile
+- Take, TakeWhile
 - Count, Any
 - Sum, Min, Max
 
@@ -50,7 +51,6 @@ Windows
 
 - Range
 - Single, Last
-- TakeWhile
 - Concat
 - Distinct, Union, Intersect, Except
 - Contains
