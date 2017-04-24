@@ -43,7 +43,8 @@ enum class which
 	Where,
 	SelectMany,
 	GroupBy,
-	OrderBy
+	OrderBy,
+	Custom
 
 };
 
@@ -168,7 +169,7 @@ struct Test<int, from::Naive, which::Skip>
 			int i = 0;
 			for (const auto &it : data)
 			{
-				if (i >= 100000)
+				if (99999 < i)
 					result += it;
 				++i;
 			}
@@ -218,7 +219,7 @@ struct Test<int, from::IEnumerable, which::Where>
 		auto &data = context.get();
 		return test("IEnum->Where", [&]() {
 			return linq::make_enumerable(data)
-				.Where([](const auto &val) noexcept { return val > 1234; })
+				.Where([](const auto &val) noexcept(true) { return val > 1234; })
 				.Sum();
 		});
 	}
@@ -247,7 +248,7 @@ struct Test<T, from::IEnumerable, which::Select>
 		auto &data = context.get();
 		return test("IEnum->Select", [&]() {
 			return linq::make_enumerable(data)
-				.Select([](const auto &val) noexcept -> const auto & { return std::get<0>(val); })
+				.Select([](const auto &val) noexcept(true) -> const auto & { return std::get<0>(val); })
 				.Sum();
 		});
 	}
@@ -284,7 +285,7 @@ struct Test<T, from::IEnumerable, which::Take>
 		auto &data = context.get();
 		return test("IEnum->Select.Take", [&]() {
 			return linq::make_enumerable(data)
-				.Select([](const auto &val) noexcept -> const auto & { return std::get<0>(val); })
+				.Select([](const auto &val) noexcept(true) -> const auto & { return std::get<0>(val); })
 				.Take(100000)
 				.Sum();
 		});
@@ -321,7 +322,7 @@ struct Test<T, from::IEnumerable, which::Skip>
 		auto &data = context.get();
 		return test("IEnum->Select.Skip", [&]() {
 			return linq::make_enumerable(data)
-				.Select([](const auto &val) noexcept -> const auto & { return std::get<0>(val); })
+				.Select([](const auto &val) noexcept(true) -> const auto & { return std::get<0>(val); })
 				.Skip(100000)
 				.Sum();
 		});
@@ -355,13 +356,12 @@ struct Test<T, from::IEnumerable, which::Where>
 		auto &data = context.get();
 		return test("IEnum->Select.Where", [&]() {
 			return linq::make_enumerable(data)
-				.Select([](const auto &val) noexcept -> const auto & { return std::get<0>(val); })
-				.Where([](const auto &val) noexcept { return val > 1234; })
+				.Select([](const auto &val) noexcept(true) -> const auto & { return std::get<0>(val); })
+				.Where([](const auto &val) noexcept(true) { return val > 1234; })
 				.Sum();
 		});
 	}
 };
-
 template <>
 struct Test<User, from::Naive, which::SelectMany>
 {
@@ -390,11 +390,11 @@ struct Test<User, from::IEnumerable, which::SelectMany>
 		return test("IEnum->SelectMany", [&]() {
 			return linq::make_enumerable(data)
 				.SelectMany(
-					[](const auto &key) noexcept { return key.group; },
-					[](const auto &key) noexcept { return key.category; },
-					[](const auto &key) noexcept { return key.likes; },
-					[](const auto &key) noexcept { return key.visits; })
-				.Select([](const auto &tupl) noexcept { return std::get<0>(tupl); })
+					[](const auto &key) noexcept(true) { return key.group; },
+					[](const auto &key) noexcept(true) { return key.category; },
+					[](const auto &key) noexcept(true) { return key.likes; },
+					[](const auto &key) noexcept(true) { return key.visits; })
+				.Select([](const auto &tupl) noexcept(true) { return std::get<0>(tupl); })
 				.Sum();
 		});
 	}
@@ -406,12 +406,14 @@ struct Test<User, from::Naive, which::GroupBy>
 	{
 		Context<User> context;
 		auto &data = context.get();
-
 		return test("Naive->GroupBy", [&]() {
 			std::unordered_map<int, std::unordered_map<int, std::vector<User>>> groups;
+			int result = 0;
 			for (const auto &it : data)
 				groups[it.group][it.category].push_back(it);
-			return 0;
+			for (const auto &it : groups)
+				result += it.first;
+			return result;
 		});
 	}
 };
@@ -423,11 +425,12 @@ struct Test<User, from::IEnumerable, which::GroupBy>
 		Context<User> context;
 		auto &data = context.get();
 		return test("IEnum->GroupBy", [&]() {
-			linq::make_enumerable(data)
+			return linq::make_enumerable(data)
 				.GroupBy(
-					[](const auto &key) noexcept { return key.group; },
-					[](const auto &key) noexcept { return key.category; });
-			return 0;
+					[](const auto &key) noexcept(true) { return key.group; },
+					[](const auto &key) noexcept(true) { return key.category; })
+				.Select([](auto const &pair) { return pair.first; })
+				.Sum();
 		});
 	}
 };
@@ -439,13 +442,13 @@ struct Test<User, from::Naive, which::OrderBy>
 		Context<User> context;
 		auto &data = context.get();
 
-		return test("Naive->OrderBy", [&]() noexcept {
+		return test("Naive->OrderBy", [&]() noexcept(true) {
 			std::sort(data.begin(), data.end(), [](User const &l, User const &r)
 			{
-				return l.group < r.group || //asc
-					(l.group == r.group && l.category > r.category) || //desc
-					(l.category == r.category && l.likes < r.likes) || //asc
-					(l.likes == r.likes && l.visits > r.visits); //desc
+				return l.group < r.group || (l.group == r.group && //asc 
+					((l.category > r.category || l.category == r.category) && //desc
+					((l.likes < r.likes || l.likes == r.likes) && //asc
+						l.visits > r.visits))); //desc
 			});
 			return 0;
 		});
@@ -461,17 +464,37 @@ struct Test<User, from::IEnumerable, which::OrderBy>
 		return test("IEnum->OrderBy", [&]() {
 			linq::make_enumerable(data)
 				.OrderBy(
-					linq::asc([](const auto &key) noexcept { return key.group; }),
-					linq::desc([](const auto &key) noexcept { return key.category; }),
-					linq::asc([](const auto &key) noexcept { return key.likes; }),
-					linq::desc([](const auto &key) noexcept { return key.visits; })
+					linq::asc([](const auto &key) noexcept(true) { return key.group; }),
+					linq::desc([](const auto &key) noexcept(true) { return key.category; }),
+					linq::asc([](const auto &key) noexcept(true) { return key.likes; }),
+					linq::desc([](const auto &key) noexcept(true) { return key.visits; })
 				);
 				return 0;
 		});
 	}
 };
 
-
+template <>
+struct Test<User, from::IEnumerable, which::Custom>
+{
+	auto operator()() const
+	{
+		Context<User> context;
+		auto &data = context.get();
+		return test("IEnum->Custom", [&]() {
+			return linq::make_enumerable(data)
+				.SelectMany([](auto const &usr) { return usr.id;},
+					        [](auto const &usr) { return usr.group;})
+				.Where([](auto const &tuple) { return std::get<0>(tuple) < 500; })
+				.Select([](auto const &tuple) { return std::get<0>(tuple); })
+				.SkipWhile([](auto const &val) { return val < 10000; })
+				.TakeWhile([](auto const &val) { return val < 100000; })
+				.Sum();
+				
+		});
+		return 0;
+	}
+};
 
 void executeTests()
 {
@@ -486,6 +509,8 @@ void executeTests()
 	assertEquals(Test<User, from::Naive, which::SelectMany>()(), Test<User, from::IEnumerable, which::SelectMany>()());
 	assertEquals(Test<User, from::Naive, which::GroupBy>()(), Test<User, from::IEnumerable, which::GroupBy>()());
 	assertEquals(Test<User, from::Naive, which::OrderBy>()(), Test<User, from::IEnumerable, which::OrderBy>()());
+	auto sum = Test<User, from::IEnumerable, which::Custom>()();
+
 }
 
 int main(int, char *[])
@@ -494,6 +519,5 @@ int main(int, char *[])
 	std::cout << "# Overhead Tests" << std::endl;
 	executeTests();
 
-	system("pause");
 	return EXIT_SUCCESS;
 }

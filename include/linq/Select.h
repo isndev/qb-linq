@@ -3,70 +3,44 @@
 
 namespace linq
 {
-	template<typename Iterator, typename Loader>
+	template <typename Base, typename Loader>
+	class select_it : public Base {
+	public:
+		typedef Base base;
+		typedef decltype(std::declval<Loader>()(*std::declval<Base>())) out;
+
+		select_it() = delete;
+		select_it(select_it const &) = default;
+		select_it(Base const &base, Loader const &loader) noexcept(true)
+			: Base(base), _loader(loader) {}
+
+		inline auto const &operator=(select_it const &rhs) noexcept(true) {
+			static_cast<Base>(*this) = static_cast<Base const &>(rhs);
+			return *this;
+		}
+		inline out operator*() const noexcept(true) {
+			return _loader(*static_cast<Base const &>(*this));
+		}
+	
+	private:
+		Loader const _loader;
+	};
+
+	template<typename BaseIt, typename Loader>
 	class Select
-		: public IState
-		<
-		Select<Iterator, Loader>,
-		Iterator,
-		decltype(std::declval<Loader>()(std::declval<decltype(*std::declval<Iterator>())>())),
-		iterator_type::load>
+		: public IState<select_it<BaseIt, Loader>>
 	{
 	public:
-		using base_iterator_t = Iterator;
-		using value_type = decltype(*std::declval<Iterator>());
-		using Out = decltype(std::declval<Loader>()(std::declval<value_type>()));
+		typedef select_it<BaseIt, Loader> iterator;
+		typedef iterator const_iterator;
 
-		using proxy_t = Select<Iterator, Loader>;
-		using base_t = IState<proxy_t, base_iterator_t, Out, iterator_type::load>;
-		using iterator_t = linq::iterator<proxy_t, base_iterator_t, Out, iterator_type::load>;
-
-		typedef iterator_t iterator;
-		typedef iterator_t const_iterator;
-	private:
-		friend iterator_t;
-		Loader const _loader;
-
-		inline Out load(base_iterator_t const &it) const noexcept
-		{
-			return _loader(*it);
-		}
+		using base_t = IState<iterator>;
 	public:
-		Select() = delete;
 		~Select() = default;
+		Select() = delete;
 		Select(Select const &) = default;
-		Select(base_iterator_t const &begin, base_iterator_t const &end,
-			Loader const &loader)
-			: base_t(begin, end), _loader(loader)
-		{}
-
-		template<typename Func>
-		auto select(Func const &next_loader) const noexcept
-		{
-			const auto &last_loader = _loader;
-			const auto &new_loader = [last_loader, next_loader](value_type value) noexcept -> decltype(next_loader(std::declval<Out>()))
-			{
-				return next_loader(last_loader(value));
-			};
-			return Select<Iterator, decltype(new_loader)>(
-				static_cast<base_iterator_t const &>(this->_begin),
-				static_cast<base_iterator_t const &>(this->_end),
-				new_loader);
-		}
-		template<typename Func>
-		auto where(Func const &next_filter) const noexcept
-		{
-			const auto &last_loader = _loader;
-			const auto &new_filter = [last_loader, next_filter](value_type value) noexcept -> bool
-			{
-				return next_filter(last_loader(value));
-			};
-			return SelectWhere<Iterator, decltype(new_filter), Loader>(
-				std::find_if(static_cast<base_iterator_t const &>(this->_begin), static_cast<base_iterator_t const &>(this->_end), new_filter),
-				static_cast<base_iterator_t const &>(this->_end),
-				new_filter,
-				last_loader);
-		}
+		Select(BaseIt const &begin, BaseIt const &end, Loader const &loader)
+			: base_t(iterator(begin, loader), iterator(end, loader)) {}
 	};
 }
 

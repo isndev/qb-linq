@@ -29,6 +29,6 @@ fclean	: clean
 re	: fclean all
 
 $(NAME): $(OBJ)
-	$(CXX) $(OBJ) -o $(NAME) $(CFLAGSEXT)
+	$(CXX) $(CXXFLAGS) $(OBJ) -o $(NAME) $(CFLAGSEXT)
 run:
 	./$(NAME)
