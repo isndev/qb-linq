@@ -13,7 +13,7 @@ namespace linq
 		basic_it(basic_it const &) = default;
 		basic_it(Base const &base) noexcept(true)
 			: Base(base) {}
-		inline auto const &operator=(basic_it const &rhs) noexcept(true) {
+		constexpr auto const &operator=(basic_it const &rhs) noexcept(true) {
 			static_cast<Base>(*this) = static_cast<Base const &>(rhs);
 			return *this;
 		}

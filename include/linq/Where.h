@@ -14,11 +14,11 @@ namespace linq
 		where_it(Base const &base, Base const &end, Filter const &filter) noexcept(true)
 			: Base(base), _end(end), _filter(filter) {}
 		
-		inline auto const &operator=(where_it const &rhs) noexcept(true) {
+		constexpr auto const &operator=(where_it const &rhs) noexcept(true) {
 			static_cast<Base>(*this) = static_cast<Base const &>(rhs);
 			return *this;
 		}
-		inline auto const &operator++() noexcept(true) {
+		constexpr auto const &operator++() noexcept(true) {
 			do
 			{
 				static_cast<Base &>(*this).operator++();

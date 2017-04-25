@@ -22,7 +22,7 @@ namespace linq
 		using Out = decltype(std::declval<KeyLoader>()(std::declval<In>()));
 		typedef typename map_type<Out, typename group_by<In, Funcs...>::type, std::is_fundamental<Out>::value>::type type;
 
-		inline static void emplace(type &handle, In const &val, KeyLoader const &func, Funcs const &...funcs) noexcept(true)
+		constexpr static void emplace(type &handle, In const &val, KeyLoader const &func, Funcs const &...funcs) noexcept(true)
 		{
 			group_by<In, Funcs...>::emplace(handle[func(val)], val, funcs...);
 		}
@@ -33,7 +33,7 @@ namespace linq
 		using Out = decltype(std::declval<KeyLoader>()(std::declval<In>()));
 		typedef typename map_type<Out, typename group_by<In>::type, std::is_fundamental<Out>::value>::type type;
 
-		inline static void emplace(type &handle, In const &val, KeyLoader const &func) noexcept(true)
+		constexpr static void emplace(type &handle, In const &val, KeyLoader const &func) noexcept(true)
 		{
 			group_by<In>::emplace(handle[func(val)], val);
 		}
@@ -43,7 +43,7 @@ namespace linq
 	{
 		typedef std::vector<typename std::remove_reference<In>::type> type;
 
-		inline static void emplace(type &vec, In const &val) noexcept(true)
+		constexpr static void emplace(type &vec, In const &val) noexcept(true)
 		{
 			vec.push_back(val);
 		}
@@ -88,7 +88,7 @@ namespace linq
 	template<typename In, order_type OrderType>
 	struct order_by_less
 	{
-		inline bool operator()(const In a, const In b) const noexcept(true)
+		constexpr bool operator()(const In a, const In b) const noexcept(true)
 		{
 			return a < b;
 		}
@@ -96,28 +96,28 @@ namespace linq
 	template<typename In>
 	struct order_by_less<In, order_type::desc>
 	{
-		inline bool operator()(const In a, const In b) const  noexcept(true)
+		constexpr bool operator()(const In a, const In b) const  noexcept(true)
 		{
 			return a < b;
 		}
 	};
 	template<typename In, typename Key1, typename Key2, typename... Keys>
-	inline bool order_by_next(In &a, In &b, Key1 const &key1, Key2 const &key2, Keys const &...keys) noexcept(true)
+	constexpr bool order_by_next(In &a, In &b, Key1 const &key1, Key2 const &key2, Keys const &...keys) noexcept(true)
 	{
 		return key1(a) == key1(b) && (order_by_less<decltype(key2(a)), Key2::type>()(key2(a), key2(b)) || order_by_next(a, b, key2, keys...));
 	}
 	template<typename In, typename Key1, typename Key2>
-	inline bool order_by_next(In &a, In &b, Key1 const &key1, Key2 const &key2) noexcept(true)
+	constexpr bool order_by_next(In &a, In &b, Key1 const &key1, Key2 const &key2) noexcept(true)
 	{
 		return key1(a) == key1(b) && order_by_less<decltype(key2(a)), Key2::type>()(key2(a), key2(b));
 	}
 	template<typename In, typename Key, typename... Keys>
-	inline bool order_by(In &a, In &b, Key const &key, Keys const &...keys) noexcept(true)
+	constexpr bool order_by(In &a, In &b, Key const &key, Keys const &...keys) noexcept(true)
 	{
 		return order_by_less<decltype(key(a)), Key::type>()(key(a), key(b)) || order_by_next(a, b, key, keys...);
 	}
 	template<typename In, typename Key>
-	inline bool order_by(In &a, In &b, Key const &key) noexcept(true)
+	constexpr bool order_by(In &a, In &b, Key const &key) noexcept(true)
 	{
 		return order_by_less<decltype(key(a)), Key::type>()(key(a), key(b));
 	}

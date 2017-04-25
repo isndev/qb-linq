@@ -36,13 +36,13 @@ namespace linq
 		All(BaseIt const &begin, BaseIt const &end, Proxy proxy)
 			: base_t(iterator(begin, proxy), iterator(end, proxy)), proxy_(proxy) {}
 
-		inline auto asc() const noexcept(true) { return *this; }
-		inline auto desc() const noexcept(true) {
+		constexpr auto asc() const noexcept(true) { return *this; }
+		constexpr auto desc() const noexcept(true) {
 			return All<decltype(proxy_->rbegin()), Proxy>(proxy_->rbegin(), proxy_->rend(), proxy_);
 		}
 
 		template<typename Key>
-		inline auto &operator[](Key const &key) const {
+		constexpr auto &operator[](Key const &key) const {
 			return (*proxy_).at(key);
 		}
 

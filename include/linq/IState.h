@@ -10,6 +10,7 @@ namespace linq
 	protected:
 		Iterator const _begin;
 		Iterator const _end;
+
 	public:
 		~IState() = default;
 		IState() = delete;
@@ -17,8 +18,9 @@ namespace linq
 		IState(Iterator const &&begin, Iterator const &&end)
 			: _begin(begin), _end(end) {}
 
-		inline Iterator const &begin() const noexcept(true) { return _begin; }
-		inline Iterator const &end() const noexcept(true) { return _end; }
+		constexpr Iterator const &begin() const noexcept(true) { return _begin; }
+		constexpr Iterator const &end() const noexcept(true) { return _end; }
+		constexpr Out first() const noexcept(true) { return *_beging; }
 
 		template<typename Func>
 		auto select(Func const &next_loader) const noexcept(true) {
@@ -41,6 +43,9 @@ namespace linq
 		}
 		template<typename Func>
 		auto where(Func const &next_filter) const noexcept(true) {
+			//auto const new_begin = std::find_if(this->_begin, this->_end, next_filter) // new begin
+			//	std::reverse_iterator<std::vector<int>::iterator>
+			// std::find_if(this->_begin, this->_end, next_filter)
 			return Where<Iterator, Func>(
 				std::find_if(this->_begin, this->_end, next_filter),
 				this->_end,
@@ -84,11 +89,11 @@ namespace linq
 			return From<Iterator>(ret, _end);
 		}
 		
-		inline auto take(int const max) const noexcept(true) {
+		constexpr auto take(int const max) const noexcept(true) {
 			return Take<Iterator>(_begin, _end, max);
 		}
 		template<typename Func>
-		inline auto takeWhile(Func const &func) const noexcept(true) {
+		constexpr auto takeWhile(Func const &func) const noexcept(true) {
 			return Take<Iterator, Func>(_begin, _end, func);
 		}
 
@@ -125,7 +130,7 @@ namespace linq
 			for (auto it = _begin; it != _end; ++it, ++number);
 			return number;
 		}
-		inline bool any() const noexcept(true) {
+		constexpr bool any() const noexcept(true) {
 			return _begin != _end;
 		}
 	};

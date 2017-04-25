@@ -14,11 +14,11 @@ namespace linq
 		select_it(Base const &base, Loader const &loader) noexcept(true)
 			: Base(base), _loader(loader) {}
 
-		inline auto const &operator=(select_it const &rhs) noexcept(true) {
+		constexpr auto const &operator=(select_it const &rhs) noexcept(true) {
 			static_cast<Base>(*this) = static_cast<Base const &>(rhs);
 			return *this;
 		}
-		inline out operator*() const noexcept(true) {
+		constexpr out operator*() const noexcept(true) {
 			return _loader(*static_cast<Base const &>(*this));
 		}
 	

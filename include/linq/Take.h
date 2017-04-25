@@ -13,11 +13,11 @@ namespace linq
 		take_it(const take_it &) = default;
 		take_it(Base const &base, In const &when) noexcept(true) : Base(base), _when(when) {}
 
-		inline auto const &operator=(Base const &rhs) noexcept(true) {
+		constexpr auto const &operator=(Base const &rhs) noexcept(true) {
 			static_cast<Base>(*this) = static_cast<Base const &>(rhs);
 			return *this;
 		}
-		inline bool operator!=(take_it const &rhs) const noexcept(true) {
+		constexpr bool operator!=(take_it const &rhs) const noexcept(true) {
 			return static_cast<Base const &>(*this) != static_cast<Base const &>(rhs) 
 				&& _when(*static_cast<Base const &>(rhs));
 		}
@@ -36,11 +36,11 @@ namespace linq
 		take_it(const take_it &) = default;
 		take_it(Base const &base, int const max) noexcept(true) : Base(base), _max(-max) {}
 
-		inline auto const &operator=(take_it const &rhs) noexcept(true) {
+		constexpr auto const &operator=(take_it const &rhs) noexcept(true) {
 			static_cast<Base>(*this) = static_cast<Base const &>(rhs);
 			return *this;
 		}
-		inline bool operator!=(take_it const &rhs) const noexcept(true) {
+		constexpr bool operator!=(take_it const &rhs) const noexcept(true) {
 			return  static_cast<Base const &>(*this) != static_cast<Base const &>(rhs) && _max++ < 0;
 		}
 	

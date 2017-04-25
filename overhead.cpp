@@ -166,13 +166,10 @@ struct Test<int, from::Naive, which::Skip>
 		auto &data = context.get();
 		return test("Naive->Skip", [&]() {
 			int result = 0;
-			int i = 0;
-			for (const auto &it : data)
-			{
-				if (99999 < i)
-					result += it;
-				++i;
-			}
+			auto begin = data.begin();
+			for (int i = 0; i < 100000; ++i, ++begin);
+			for (;begin != data.end(); ++begin)
+				result += *begin;
 			return result;
 		});
 	}
@@ -202,7 +199,7 @@ struct Test<int, from::Naive, which::Where>
 			int result = 0;
 			for (const auto &it : data)
 			{
-				const auto val = it;
+				const auto &val = it;
 				if (val > 1234)
 					result += val;
 			}
@@ -301,14 +298,10 @@ struct Test<T, from::Naive, which::Skip>
 
 		return test("Naive->Select.Skip", [&]() {
 			int result = 0;
-			int i = 0;
-			for (const auto &it : data)
-			{
-				const auto val = std::get<0>(it);
-				if (i >= 100000)
-					result += val;
-				++i;
-			}
+			auto begin = data.begin();
+			for (int i = 0; i < 100000; ++i, ++begin);
+			for (; begin != data.end(); ++begin)
+				result += std::get<0>(*begin);
 			return result;
 		});
 	}
@@ -339,7 +332,7 @@ struct Test<T, from::Naive, which::Where>
 			int result = 0;
 			for (const auto &it : data)
 			{
-				const auto val = std::get<0>(it);
+				const auto &val = std::get<0>(it);
 				if (val > 1234)
 					result += val;
 			}
@@ -510,7 +503,6 @@ void executeTests()
 	assertEquals(Test<User, from::Naive, which::GroupBy>()(), Test<User, from::IEnumerable, which::GroupBy>()());
 	assertEquals(Test<User, from::Naive, which::OrderBy>()(), Test<User, from::IEnumerable, which::OrderBy>()());
 	auto sum = Test<User, from::IEnumerable, which::Custom>()();
-
 }
 
 int main(int, char *[])
