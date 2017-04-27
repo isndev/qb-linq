@@ -44,13 +44,14 @@ Windows
 - GroupBy
 - Skip, SkipWhile
 - Take, TakeWhile
+- First, FirstOrDefault
+- Last, LastOrDefault
 - Count, Any
 - Sum, Min, Max
 
 #### Todo
 
 - Range
-- Single, Last
 - Concat
 - Distinct, Union, Intersect, Except
 - Contains

@@ -7,19 +7,50 @@ namespace linq
 	class select_it : public Base {
 	public:
 		typedef Base base;
-		typedef decltype(std::declval<Loader>()(*std::declval<Base>())) out;
+		typedef typename Base::iterator_category							iterator_category;
+		typedef decltype(std::declval<Loader>()(*std::declval<Base>()))		value_type;
+		typedef typename Base::difference_type								difference_type;
+		typedef typename Base::pointer										pointer;
+		typedef value_type 													reference;
 
 		select_it() = delete;
-		select_it(select_it const &) = default;
+		select_it(select_it const &rhs)
+			: Base(static_cast<Base const &>(rhs)), _loader(rhs._loader)
+
+		{
+
+		}
 		select_it(Base const &base, Loader const &loader) noexcept(true)
-			: Base(base), _loader(loader) {}
+			: Base(base), _loader(loader)
+		{}
 
 		constexpr auto const &operator=(select_it const &rhs) noexcept(true) {
 			static_cast<Base>(*this) = static_cast<Base const &>(rhs);
 			return *this;
 		}
-		constexpr out operator*() const noexcept(true) {
+		constexpr auto const &operator++() noexcept(true) {
+			static_cast<Base &>(*this).operator++();
+			return (*this);
+		}
+		constexpr auto const operator++(int) noexcept(true) {
+			auto tmp = *this;
+			operator++();
+			return (tmp);
+		}
+		constexpr auto const &operator--() noexcept(true) {
+			static_cast<Base &>(*this).operator--();
+			return (*this);
+		}
+		constexpr auto const operator--(int) noexcept(true) {
+			auto tmp = *this;
+			operator--();
+			return (tmp);
+		}
+		constexpr value_type operator*() const noexcept(true) {
 			return _loader(*static_cast<Base const &>(*this));
+		}
+		constexpr value_type operator->() const noexcept(true) {
+			return *(*this);
 		}
 	
 	private:
@@ -38,9 +69,13 @@ namespace linq
 	public:
 		~Select() = default;
 		Select() = delete;
-		Select(Select const &) = default;
+		Select(Select const &rhs)
+			: base_t(static_cast<base_t const &>(rhs))
+		{}
+
 		Select(BaseIt const &begin, BaseIt const &end, Loader const &loader)
-			: base_t(iterator(begin, loader), iterator(end, loader)) {}
+			: base_t(iterator(begin, loader), iterator(end, loader))
+		{}
 	};
 }
 

@@ -475,14 +475,16 @@ struct Test<User, from::IEnumerable, which::Custom>
 		Context<User> context;
 		auto &data = context.get();
 		return test("IEnum->Custom", [&]() {
-			return linq::make_enumerable(data)
-				.SelectMany([](auto const &usr) { return usr.id;},
-					        [](auto const &usr) { return usr.group;})
-				.Where([](auto const &tuple) { return std::get<0>(tuple) < 500; })
+			auto enu = linq::make_enumerable(data)
+				.SelectMany([](auto const &usr) { return usr.id; },
+					[](auto const &usr) { return usr.group; })
+				.Where([](auto const &tuple) { return std::get<0>(tuple) <= 100000; })
 				.Select([](auto const &tuple) { return std::get<0>(tuple); })
-				.SkipWhile([](auto const &val) { return val < 10000; })
-				.TakeWhile([](auto const &val) { return val < 100000; })
-				.Sum();
+				.SkipWhile([](auto const &val) { return val < 5000; });
+			//int sum = 0;
+			//enu.TakeWhile([&sum](auto const &val) { ++sum; return val < 100000; }).Sum();
+			return enu.First() + enu.FirstOrDefault() + enu.Last() + enu.LastOrDefault();
+				
 				
 		});
 		return 0;
@@ -502,7 +504,7 @@ void executeTests()
 	assertEquals(Test<User, from::Naive, which::SelectMany>()(), Test<User, from::IEnumerable, which::SelectMany>()());
 	assertEquals(Test<User, from::Naive, which::GroupBy>()(), Test<User, from::IEnumerable, which::GroupBy>()());
 	assertEquals(Test<User, from::Naive, which::OrderBy>()(), Test<User, from::IEnumerable, which::OrderBy>()());
-	auto sum = Test<User, from::IEnumerable, which::Custom>()();
+	assertEquals(Test<User, from::IEnumerable, which::Custom>()(), 210000);
 }
 
 int main(int, char *[])
@@ -510,6 +512,6 @@ int main(int, char *[])
 	std::srand(time(0));
 	std::cout << "# Overhead Tests" << std::endl;
 	executeTests();
-
+	system("pause");
 	return EXIT_SUCCESS;
 }

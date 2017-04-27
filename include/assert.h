@@ -1,10 +1,11 @@
-#pragma once
-
 #include <string>
 #include <sstream>
 #include <iostream>
 #include <chrono>
 #include <queue>
+
+#ifndef ASSERT_H_
+# define ASSERT_H_
 
 template <typename T1, typename T2>
 void assertEquals(T1 t1, T2 t2)
@@ -53,3 +54,5 @@ auto test(const std::string& name, F f, std::ostream& os = std::cout)
 	//	return decltype(f()){};
 	//}
 }
+
+#endif // !ASSERT_H_
