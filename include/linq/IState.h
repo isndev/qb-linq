@@ -20,10 +20,12 @@ namespace linq
 
 		constexpr Iterator const &begin() const noexcept(true) { return _begin; }
 		constexpr Iterator const &end() const noexcept(true) { return _end; }
+		
 		constexpr Out first() const noexcept(true) { return *_begin; }
 		constexpr auto firstOrDefault() const noexcept(true) {
 			return any() ? first() : typename std::remove_reference<Out>::type{};
 		}
+		
 		constexpr Out last() const noexcept(true) { return *std::reverse_iterator<Iterator>(_end); }
 		constexpr auto lastOrDefault() const noexcept(true) {
 			return any() ? last() : typename std::remove_reference<Out>::type{};
@@ -48,6 +50,7 @@ namespace linq
 				this->_end,
 				next_loader);
 		}
+		
 		template<typename Func>
 		constexpr auto where(Func const &next_filter) const noexcept(true) {
 			auto const new_begin = std::find_if(_begin, _end, next_filter);
@@ -95,6 +98,7 @@ namespace linq
 				++ret;
 			return From<Iterator>(ret, _end);
 		}		
+		
 		constexpr auto take(int const max) const noexcept(true) {
 			return Take<Iterator>(_begin, _end, max);
 		}
@@ -103,6 +107,29 @@ namespace linq
 			return Take<Iterator, Func>(_begin, _end, func);
 		}
 
+		template<typename Func>
+		constexpr void each(Func const &pred) const noexcept(true) {
+			for (Out it : *this)
+				pred(it);
+		}
+
+		template <typename T>
+		constexpr bool contains(T const &elem) const noexcept(true)
+		{
+			for (Out it : *this)
+				if (it == elem)
+					return true;
+			return false;
+		}
+		constexpr bool any() const noexcept(true) {
+			return _begin != _end;
+		}
+		constexpr auto count() const noexcept(true) {
+			std::size_t number{ 0 };
+			for (auto it = _begin; it != _end; ++it, ++number);
+			return number;
+		}
+		
 		constexpr auto all() const noexcept(true)
 		{
 			using vec_out = typename std::vector<typename std::remove_const<typename std::remove_reference<Out>::type>::type>;
@@ -131,14 +158,7 @@ namespace linq
 				result += it;
 			return result;
 		}
-		constexpr auto count() const noexcept(true) {
-			std::size_t number{ 0 };
-			for (auto it = _begin; it != _end; ++it, ++number);
-			return number;
-		}
-		constexpr bool any() const noexcept(true) {
-			return _begin != _end;
-		}
+				
 	};
 }
 

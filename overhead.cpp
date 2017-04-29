@@ -401,7 +401,7 @@ struct Test<T, which::Custom>
 				.Select([](auto const &tuple) { return std::get<0>(tuple); })
 				.SkipWhile([](auto const &val) { return val < 5000; });
 			int sum = 0;
-			enu.TakeWhile([&sum](auto const &val) { ++sum; return val < 100000; }).Sum();
+			enu.TakeWhile([](auto const &val) { return val < 100000; }).Each([&sum](auto const &) {  ++sum; });
 			return  enu.First() + enu.FirstOrDefault() + enu.Last() + enu.LastOrDefault() + sum;
 				
 				
@@ -426,7 +426,7 @@ void executeTests()
 	assertEquals(Test<User, which::SelectMany>()(), true);
 	assertEquals(Test<User, which::GroupBy>()(), true);
 	assertEquals(Test<User, which::OrderBy>()(), true);
-	assertEquals(Test<User, which::Custom>()(), 305001);
+	assertEquals(Test<User, which::Custom>()(), 305000);
 
 	std::cout << "# Overhead Random User" << std::endl;
 	assertEquals(Test<UserRandom, which::Select>()(), true);
@@ -436,7 +436,7 @@ void executeTests()
 	assertEquals(Test<UserRandom, which::SelectMany>()(), true);
 	assertEquals(Test<UserRandom, which::GroupBy>()(), true);
 	assertEquals(Test<UserRandom, which::OrderBy>()(), true);
-	assertEquals(Test<UserRandom, which::Custom>()(), 305001);
+	assertEquals(Test<UserRandom, which::Custom>()(), 305000);
 }
 
 int main(int, char *[])
