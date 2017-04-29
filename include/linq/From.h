@@ -10,7 +10,7 @@ namespace linq
 		typedef typename Base::iterator_category iterator_category;
 		typedef decltype(*std::declval<Base>())	 value_type;
 		typedef typename Base::difference_type	 difference_type;
-		typedef typename Base::pointer			 pointer;
+		typedef typename Base::pointer		     pointer;
 		typedef value_type 	                     reference;
 
 		basic_it() = delete;

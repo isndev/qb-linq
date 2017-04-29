@@ -5,15 +5,8 @@
 #include "linq/linq.h"
 #include "assert.h"
 
+#define SEPARATOR_TEST "------------------------------------------------------"
 
-struct Object : public std::tuple<int, int, int, int> {
-	Object(int seed) {
-		std::get<0>(*this) = seed;
-		std::get<1>(*this) = seed % 1024;
-		std::get<2>(*this) = seed / 1024;
-		std::get<3>(*this) = seed * 2;
-	}
-};
 struct User
 {
 	int id;
@@ -27,10 +20,20 @@ struct User
 	}
 };
 
-enum class from
+struct UserRandom
 {
-	Naive,
-	IEnumerable,
+	int id;
+	int group;
+	int category;
+	int likes;
+	int visits;
+	UserRandom(int seed)
+		: id(seed), group((int)(std::rand() * 1000.0 / RAND_MAX) % 1024),
+		category((int)(std::rand() * 1000.0 / RAND_MAX) % 128),
+		likes((int)(std::rand() * 1000.0 / RAND_MAX) % 8192),
+		visits((int)(std::rand() * 1000.0 / RAND_MAX) % 16384)
+	{
+	}
 };
 
 enum class which
@@ -69,14 +72,14 @@ public:
 	Context(int max = 200000)
 		: Max(max), context_c(context_)
 	{
+		std::cout << SEPARATOR_TEST << std::endl;
 		context_.reserve(Max);
 		for (int i = 0; i < Max; ++i)
 			context_.push_back({ i });
 	}
 	auto &get() { return context_; }
-	auto &cget() const { return context_c; }
+	auto const &cget() const { return context_c; }
 };
-
 template <>
 class Context<int>
 {
@@ -89,6 +92,7 @@ public:
 	Context(int max = 200000)
 		: Max(max), context_c(context_)
 	{
+		std::cout << SEPARATOR_TEST << std::endl;
 		context_.reserve(Max);
 		for (int i = 0; i < Max; ++i)
 			context_.push_back({ i % 12345 });
@@ -97,60 +101,46 @@ public:
 	auto &cget() const { return context_c; }
 };
 
-template <typename T, from From, which type>
+template <typename T, which type>
 struct Test;
-
+/* Tests enum vs simple vector<int>*/
 template <>
-struct Test<int, from::Naive, which::From>
+struct Test<int, which::From>
 {
 	auto operator()() const
 	{
 		Context<int> context;
 		auto &data = context.get();
-		return test("Naive->From", [&]() {
+		return
+		test("Naive->From", [&]() {
 			int result = 0;
 			for (const auto &it : data)
 				result += it;
 			return result;
-		});
-	}
-};
-template <>
-struct Test<int, from::IEnumerable, which::From>
-{
-	auto operator()() const
-	{
-		Context<int> context;
-		auto &data = context.get();
-		return test("IEnum->From", [&]() {
+		})
+		==
+		test("IEnum->From", [&]() {
 			return linq::make_enumerable(data)
 				.Sum();
 		});
 	}
 };
 template <>
-struct Test<int, from::Naive, which::Take>
+struct Test<int, which::Take>
 {
 	auto operator()() const
 	{
 		Context<int> context;
 		auto &data = context.get();
-		return test("Naive->Take", [&]() {
+		return
+		test("Naive->Take", [&]() {
 			int result = 0;
 			for (int i = 0; i < 100000; ++i)
 				result += data[i];
 			return result;
-		});
-	}
-};
-template <>
-struct Test<int, from::IEnumerable, which::Take>
-{
-	auto operator()() const
-	{
-		Context<int> context;
-		auto &data = context.get();
-		return test("IEnum->Take", [&]() {
+		})
+		==
+		test("IEnum->Take", [&]() {
 			return linq::make_enumerable(data)
 				.Take(100000)
 				.Sum();
@@ -158,7 +148,7 @@ struct Test<int, from::IEnumerable, which::Take>
 	}
 };
 template <>
-struct Test<int, from::Naive, which::Skip>
+struct Test<int, which::Skip>
 {
 	auto operator()() const
 	{
@@ -171,17 +161,9 @@ struct Test<int, from::Naive, which::Skip>
 			for (;begin != data.end(); ++begin)
 				result += *begin;
 			return result;
-		});
-	}
-};
-template <>
-struct Test<int, from::IEnumerable, which::Skip>
-{
-	auto operator()() const
-	{
-		Context<int> context;
-		auto &data = context.get();
-		return test("IEnum->Skip", [&]() {
+		})
+		==
+		test("IEnum->Skip", [&]() {
 			return linq::make_enumerable(data)
 				.Skip(100000)
 				.Sum();
@@ -189,7 +171,7 @@ struct Test<int, from::IEnumerable, which::Skip>
 	}
 };
 template <>
-struct Test<int, from::Naive, which::Where>
+struct Test<int, which::Where>
 {
 	auto operator()() const
 	{
@@ -204,165 +186,127 @@ struct Test<int, from::Naive, which::Where>
 					result += val;
 			}
 			return result;
-		});
-	}
-};
-template <>
-struct Test<int, from::IEnumerable, which::Where>
-{
-	auto operator()() const
-	{
-		Context<int> context;
-		auto &data = context.get();
-		return test("IEnum->Where", [&]() {
+		})
+		==
+		test("IEnum->Where", [&]() {
 			return linq::make_enumerable(data)
 				.Where([](const auto &val) noexcept(true) { return val > 1234; })
 				.Sum();
 		});
 	}
 };
+/* Tests enum vs complexe vector<object>*/
 template <typename T>
-struct Test<T, from::Naive, which::Select>
+struct Test<T, which::Select>
 {
 	auto operator()() const
 	{
 		Context<T> context;
 		auto &data = context.get();
-		return test("Naive->Select", [&]() {
+		return
+			test("Naive->Select", [&]() {
 			int result = 0;
 			for (const auto &it : data)
-				result += std::get<0>(it);
+				result += it.id;
 			return result;
-		});
-	}
-};
-template <typename T>
-struct Test<T, from::IEnumerable, which::Select>
-{
-	auto operator()() const
-	{
-		Context<T> context;
-		auto &data = context.get();
-		return test("IEnum->Select", [&]() {
+		})
+			==
+			test("IEnum->Select", [&]() {
 			return linq::make_enumerable(data)
-				.Select([](const auto &val) noexcept(true) -> const auto & { return std::get<0>(val); })
+				.Select([](const auto &val) noexcept(true) -> const auto { return val.id; })
 				.Sum();
 		});
 	}
 };
 template <typename T>
-struct Test<T, from::Naive, which::Take>
+struct Test<T, which::Take>
 {
 	auto operator()() const
 	{
 		Context<T> context;
 		auto &data = context.get();
-
-		return test("Naive->Select.Take", [&]() {
+		return
+		test("Naive->Take", [&]() {
 			int result = 0;
 			int i = 0;
 			for (const auto &it : data)
 			{
-				const auto val = std::get<0>(it);
+				const auto val = it.id;
 				if (i < 100000)
 					result += val;
 				else break;
 				++i;
 			}
 			return result;
-		});
-	}
-};
-template <typename T>
-struct Test<T, from::IEnumerable, which::Take>
-{
-	auto operator()() const
-	{
-		Context<T> context;
-		auto &data = context.get();
-		return test("IEnum->Select.Take", [&]() {
+		})
+		==
+		test("IEnum->Take", [&]() {
 			return linq::make_enumerable(data)
-				.Select([](const auto &val) noexcept(true) -> const auto & { return std::get<0>(val); })
+				.Select([](const auto &val) noexcept(true) -> const auto { return val.id; })
 				.Take(100000)
 				.Sum();
 		});
 	}
 };
 template <typename T>
-struct Test<T, from::Naive, which::Skip>
+struct Test<T, which::Skip>
 {
 	auto operator()() const
 	{
 		Context<T> context;
 		auto &data = context.get();
 
-		return test("Naive->Select.Skip", [&]() {
+		return test("Naive->Skip", [&]() {
 			int result = 0;
 			auto begin = data.begin();
 			for (int i = 0; i < 100000; ++i, ++begin);
 			for (; begin != data.end(); ++begin)
-				result += std::get<0>(*begin);
+				result += (*begin).id;
 			return result;
-		});
-	}
-};
-template <typename T>
-struct Test<T, from::IEnumerable, which::Skip>
-{
-	auto operator()() const
-	{
-		Context<T> context;
-		auto &data = context.get();
-		return test("IEnum->Select.Skip", [&]() {
+		})
+		==
+		test("IEnum->Skip", [&]() {
 			return linq::make_enumerable(data)
-				.Select([](const auto &val) noexcept(true) -> const auto & { return std::get<0>(val); })
+				.Select([](const auto &val) noexcept(true) -> const auto { return val.id; })
 				.Skip(100000)
 				.Sum();
 		});
 	}
 };
 template <typename T>
-struct Test<T, from::Naive, which::Where>
+struct Test<T, which::Where>
 {
 	auto operator()() const
 	{
 		Context<T> context;
 		auto &data = context.get();
-		return test("Naive->Select.Where", [&]() {
+		return test("Naive->Where", [&]() {
 			int result = 0;
 			for (const auto &it : data)
 			{
-				const auto &val = std::get<0>(it);
+				const auto &val = it.id;
 				if (val > 1234)
 					result += val;
 			}
 			return result;
-		});
-	}
-};
-template <typename T>
-struct Test<T, from::IEnumerable, which::Where>
-{
-	auto operator()() const
-	{
-		Context<T> context;
-		auto &data = context.get();
-		return test("IEnum->Select.Where", [&]() {
+		})
+		==
+		test("IEnum->Where", [&]() {
 			return linq::make_enumerable(data)
-				.Select([](const auto &val) noexcept(true) -> const auto & { return std::get<0>(val); })
+				.Select([](const auto &val) noexcept(true) -> const auto & { return val.id; })
 				.Where([](const auto &val) noexcept(true) { return val > 1234; })
 				.Sum();
 		});
 	}
 };
-template <>
-struct Test<User, from::Naive, which::SelectMany>
+template <typename T>
+struct Test<T, which::SelectMany>
 {
 	auto operator()() const
 	{
-		Context<User> context;
+		Context<T> context;
 		auto &data = context.get();
-		return test("Naive->SelectMany", [&]() {
+		return test("Naive->SelectM", [&]() {
 			int result = 0;
 			for (const auto &it : data)
 			{
@@ -370,17 +314,9 @@ struct Test<User, from::Naive, which::SelectMany>
 				result += std::get<0>(tupl);
 			}
 			return result;
-		});
-	}
-};
-template <>
-struct Test<User, from::IEnumerable, which::SelectMany>
-{
-	auto operator()() const
-	{
-		Context<User> context;
-		auto &data = context.get();
-		return test("IEnum->SelectMany", [&]() {
+		})
+		==
+		test("IEnum->SelectM", [&]() {
 			return linq::make_enumerable(data)
 				.SelectMany(
 					[](const auto &key) noexcept(true) { return key.group; },
@@ -392,32 +328,24 @@ struct Test<User, from::IEnumerable, which::SelectMany>
 		});
 	}
 };
-template<>
-struct Test<User, from::Naive, which::GroupBy>
+template <typename T>
+struct Test<T, which::GroupBy>
 {
 	auto operator()() const
 	{
-		Context<User> context;
+		Context<T> context;
 		auto &data = context.get();
 		return test("Naive->GroupBy", [&]() {
-			std::unordered_map<int, std::unordered_map<int, std::vector<User>>> groups;
+			std::unordered_map<int, std::unordered_map<int, std::vector<T>>> groups;
 			int result = 0;
 			for (const auto &it : data)
 				groups[it.group][it.category].push_back(it);
 			for (const auto &it : groups)
 				result += it.first;
 			return result;
-		});
-	}
-};
-template <>
-struct Test<User, from::IEnumerable, which::GroupBy>
-{
-	auto operator()() const
-	{
-		Context<User> context;
-		auto &data = context.get();
-		return test("IEnum->GroupBy", [&]() {
+		})
+		==
+		test("IEnum->GroupBy", [&]() {
 			return linq::make_enumerable(data)
 				.GroupBy(
 					[](const auto &key) noexcept(true) { return key.group; },
@@ -427,16 +355,16 @@ struct Test<User, from::IEnumerable, which::GroupBy>
 		});
 	}
 };
-template<>
-struct Test<User, from::Naive, which::OrderBy>
+template <typename T>
+struct Test<T, which::OrderBy>
 {
 	auto operator()() const
 	{
-		Context<User> context;
+		Context<T> context;
 		auto &data = context.get();
 
 		return test("Naive->OrderBy", [&]() noexcept(true) {
-			std::sort(data.begin(), data.end(), [](User const &l, User const &r)
+			std::sort(data.begin(), data.end(), [](T const &l, T const &r)
 			{
 				return l.group < r.group || (l.group == r.group && //asc 
 					((l.category > r.category || l.category == r.category) && //desc
@@ -444,17 +372,9 @@ struct Test<User, from::Naive, which::OrderBy>
 						l.visits > r.visits))); //desc
 			});
 			return 0;
-		});
-	}
-};
-template <>
-struct Test<User, from::IEnumerable, which::OrderBy>
-{
-	auto operator()() const
-	{
-		Context<User> context;
-		auto &data = context.get();
-		return test("IEnum->OrderBy", [&]() {
+		})
+		==
+		test("IEnum->OrderBy", [&]() {
 			linq::make_enumerable(data)
 				.OrderBy(
 					linq::asc([](const auto &key) noexcept(true) { return key.group; }),
@@ -462,17 +382,16 @@ struct Test<User, from::IEnumerable, which::OrderBy>
 					linq::asc([](const auto &key) noexcept(true) { return key.likes; }),
 					linq::desc([](const auto &key) noexcept(true) { return key.visits; })
 				);
-				return 0;
+			return 0;
 		});
 	}
 };
-
-template <>
-struct Test<User, from::IEnumerable, which::Custom>
+template <typename T>
+struct Test<T, which::Custom>
 {
 	auto operator()() const
 	{
-		Context<User> context;
+		Context<T> context;
 		auto &data = context.get();
 		return test("IEnum->Custom", [&]() {
 			auto enu = linq::make_enumerable(data)
@@ -481,9 +400,9 @@ struct Test<User, from::IEnumerable, which::Custom>
 				.Where([](auto const &tuple) { return std::get<0>(tuple) <= 100000; })
 				.Select([](auto const &tuple) { return std::get<0>(tuple); })
 				.SkipWhile([](auto const &val) { return val < 5000; });
-			//int sum = 0;
-			//enu.TakeWhile([&sum](auto const &val) { ++sum; return val < 100000; }).Sum();
-			return enu.First() + enu.FirstOrDefault() + enu.Last() + enu.LastOrDefault();
+			int sum = 0;
+			enu.TakeWhile([&sum](auto const &val) { ++sum; return val < 100000; }).Sum();
+			return  enu.First() + enu.FirstOrDefault() + enu.Last() + enu.LastOrDefault() + sum;
 				
 				
 		});
@@ -493,18 +412,31 @@ struct Test<User, from::IEnumerable, which::Custom>
 
 void executeTests()
 {
-	assertEquals(Test<int, from::Naive, which::From>()(), Test<int, from::IEnumerable, which::From>()());
-	assertEquals(Test<int, from::Naive, which::Take>()(), Test<int, from::IEnumerable, which::Take>()());
-	assertEquals(Test<int, from::Naive, which::Skip>()(), Test<int, from::IEnumerable, which::Skip>()());
-	assertEquals(Test<int, from::Naive, which::Where>()(), Test<int, from::IEnumerable, which::Where>()());
-	assertEquals(Test<Object, from::Naive, which::Select>()(), Test<Object, from::IEnumerable, which::Select>()());
-	assertEquals(Test<Object, from::Naive, which::Take>()(), Test<Object, from::IEnumerable, which::Take>()());
-	assertEquals(Test<Object, from::Naive, which::Skip>()(), Test<Object, from::IEnumerable, which::Skip>()());
-	assertEquals(Test<Object, from::Naive, which::Where>()(), Test<Object, from::IEnumerable, which::Where>()());
-	assertEquals(Test<User, from::Naive, which::SelectMany>()(), Test<User, from::IEnumerable, which::SelectMany>()());
-	assertEquals(Test<User, from::Naive, which::GroupBy>()(), Test<User, from::IEnumerable, which::GroupBy>()());
-	assertEquals(Test<User, from::Naive, which::OrderBy>()(), Test<User, from::IEnumerable, which::OrderBy>()());
-	assertEquals(Test<User, from::IEnumerable, which::Custom>()(), 210000);
+	std::cout << "# Overhead Int" << std::endl;
+	assertEquals(Test<int, which::From>()(), true);
+	assertEquals(Test<int, which::Take>()(), true);
+	assertEquals(Test<int, which::Skip>()(), true);
+	assertEquals(Test<int, which::Where>()(), true);
+
+	std::cout << "# Overhead User" << std::endl;
+	assertEquals(Test<User, which::Select>()(), true);
+	assertEquals(Test<User, which::Take>()(), true);
+	assertEquals(Test<User, which::Skip>()(), true);
+	assertEquals(Test<User, which::Where>()(), true);
+	assertEquals(Test<User, which::SelectMany>()(), true);
+	assertEquals(Test<User, which::GroupBy>()(), true);
+	assertEquals(Test<User, which::OrderBy>()(), true);
+	assertEquals(Test<User, which::Custom>()(), 305001);
+
+	std::cout << "# Overhead Random User" << std::endl;
+	assertEquals(Test<UserRandom, which::Select>()(), true);
+	assertEquals(Test<UserRandom, which::Take>()(), true);
+	assertEquals(Test<UserRandom, which::Skip>()(), true);
+	assertEquals(Test<UserRandom, which::Where>()(), true);
+	assertEquals(Test<UserRandom, which::SelectMany>()(), true);
+	assertEquals(Test<UserRandom, which::GroupBy>()(), true);
+	assertEquals(Test<UserRandom, which::OrderBy>()(), true);
+	assertEquals(Test<UserRandom, which::Custom>()(), 305001);
 }
 
 int main(int, char *[])

@@ -42,7 +42,7 @@ namespace linq
 		}
 		constexpr bool operator!=(take_it const &rhs) const noexcept(true) {
 			return static_cast<Base const &>(*this) != static_cast<Base const &>(rhs) 
-				&& _when(*static_cast<Base const &>(rhs));
+				&& _when(*static_cast<Base const &>(*this));
 		}
 		constexpr bool operator==(take_it const &rhs) const noexcept(true) {
 			return static_cast<Base const &>(*this) == static_cast<Base const &>(rhs)

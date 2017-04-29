@@ -14,12 +14,7 @@ namespace linq
 		typedef value_type 													reference;
 
 		select_it() = delete;
-		select_it(select_it const &rhs)
-			: Base(static_cast<Base const &>(rhs)), _loader(rhs._loader)
-
-		{
-
-		}
+		select_it(select_it const &rhs) = default;
 		select_it(Base const &base, Loader const &loader) noexcept(true)
 			: Base(base), _loader(loader)
 		{}
