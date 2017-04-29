@@ -54,4 +54,4 @@ Windows
 
 - Range
 - Concat
-- Distinct, Union, Intersect, Except
+- Distinct, Union, Intersect

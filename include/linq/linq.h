@@ -9,10 +9,6 @@
 #include <vector>
 #include <map>
 
-
-
-
-
 #ifndef LINQ_H_
 # define LINQ_H_
 # include "linq/utility.h"

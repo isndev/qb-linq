@@ -75,8 +75,7 @@ namespace linq
 		template<typename... Funcs>
 		constexpr auto orderBy(Funcs const &... keys) const noexcept(true) {
 			auto proxy = std::make_shared<std::vector<typename std::remove_reference<Out>::type>>();
-			for (Out it : *this)
-				proxy->push_back(it);
+			std::copy(_begin, _end, std::back_inserter(*proxy));
 			std::sort(proxy->begin(), proxy->end(), [keys...](Out a, Out b) -> bool
 			{
 				return order_by(a, b, std::move(order_by_modifier_end<Out, Funcs>(keys))...);
@@ -158,7 +157,7 @@ namespace linq
 				result += it;
 			return result;
 		}
-				
+
 	};
 }
 

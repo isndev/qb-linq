@@ -98,7 +98,7 @@ namespace linq
 	{
 		constexpr bool operator()(const In a, const In b) const  noexcept(true)
 		{
-			return a < b;
+			return a > b;
 		}
 	};
 	template<typename In, typename Key1, typename Key2, typename... Keys>

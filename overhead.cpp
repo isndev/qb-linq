@@ -210,8 +210,8 @@ struct Test<T, which::Select>
 				result += it.id;
 			return result;
 		})
-			==
-			test("IEnum->Select", [&]() {
+		==
+		test("IEnum->Select", [&]() {
 			return linq::make_enumerable(data)
 				.Select([](const auto &val) noexcept(true) -> const auto { return val.id; })
 				.Sum();
@@ -398,12 +398,14 @@ struct Test<T, which::Custom>
 				.SelectMany([](auto const &usr) { return usr.id; },
 					[](auto const &usr) { return usr.group; })
 				.Where([](auto const &tuple) { return std::get<0>(tuple) <= 100000; })
-				.Select([](auto const &tuple) { return std::get<0>(tuple); })
-				.SkipWhile([](auto const &val) { return val < 5000; });
+				.OrderBy(linq::desc([](auto const &tuple) { return std::get<1>(tuple); }))
+				.Select([](auto const &tuple) { return std::get<0>(tuple); });
 			int sum = 0;
-			enu.TakeWhile([](auto const &val) { return val < 100000; }).Each([&sum](auto const &) {  ++sum; });
-			return  enu.First() + enu.FirstOrDefault() + enu.Last() + enu.LastOrDefault() + sum;
-				
+			if (enu.Contains(10000))
+				enu.TakeWhile([](auto const &val) { return val <= 100000; }).Each([&sum](auto const &) {  ++sum; });
+			return enu.min() + enu.max() 
+				   + enu.First() - enu.FirstOrDefault() +
+				   + enu.Last() - enu.LastOrDefault() + sum;			
 				
 		});
 		return 0;
@@ -426,7 +428,7 @@ void executeTests()
 	assertEquals(Test<User, which::SelectMany>()(), true);
 	assertEquals(Test<User, which::GroupBy>()(), true);
 	assertEquals(Test<User, which::OrderBy>()(), true);
-	assertEquals(Test<User, which::Custom>()(), 305000);
+	assertEquals(Test<User, which::Custom>()(), 200001);
 
 	std::cout << "# Overhead Random User" << std::endl;
 	assertEquals(Test<UserRandom, which::Select>()(), true);
@@ -436,7 +438,7 @@ void executeTests()
 	assertEquals(Test<UserRandom, which::SelectMany>()(), true);
 	assertEquals(Test<UserRandom, which::GroupBy>()(), true);
 	assertEquals(Test<UserRandom, which::OrderBy>()(), true);
-	assertEquals(Test<UserRandom, which::Custom>()(), 305000);
+	assertEquals(Test<UserRandom, which::Custom>()(), 200001);
 }
 
 int main(int, char *[])
