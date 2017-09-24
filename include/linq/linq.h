@@ -11,7 +11,7 @@
 
 #ifndef LINQ_H_
 # define LINQ_H_
-# include "linq/utility.h"
+# include "linq/Utility.h"
 
 namespace linq
 {
