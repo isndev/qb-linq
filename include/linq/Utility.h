@@ -49,78 +49,115 @@ namespace linq
 		}
 	};
 
-	enum class order_type
+	// order utils
+
+	// filter | filter type
+	// modifier
+
+	enum class eOrderType
 	{
 		asc,
-		desc
+		desc,
+		custom
 	};
-	template<typename Key, order_type OrderType = order_type::asc>
-	struct order_by_modifier
-	{
-		typedef Key key_type;
-		static constexpr order_type ob_type = OrderType;
 
+
+	template<eOrderType FilterType, typename Key = void, typename = void>
+	struct TFilter;
+
+	struct FilterBase
+	{
+		template <typename Lhs, typename Rhs>
+		constexpr bool next(Lhs const &lhs, Rhs const &rhs) const noexcept(true)
+		{
+			return lhs == rhs;
+		}
+	};
+
+	template<>
+	struct TFilter<eOrderType::asc> : FilterBase
+	{
+		template <typename Lhs, typename Rhs>
+		constexpr bool operator()(Lhs const &lhs, Rhs const &rhs) const noexcept(true)
+		{
+			return lhs < rhs;
+		}
+	};
+
+	template<>
+	struct TFilter<eOrderType::desc> : FilterBase
+	{
+		template <typename Lhs, typename Rhs>
+		constexpr bool operator()(Lhs const &lhs, Rhs const &rhs) const noexcept(true)
+		{
+			return lhs > rhs;
+		}
+	};
+
+
+	template<>
+	struct TFilter<eOrderType::custom>
+	{
+		template <typename Lhs, typename Rhs>
+		constexpr bool operator()(Lhs const &lhs, Rhs const &rhs) const noexcept(true)
+		{
+			return false;
+		}
+
+		template <typename Lhs, typename Rhs>
+		constexpr bool next(Lhs const &lhs, Rhs const &rhs) const noexcept(true)
+		{
+			return false;
+		}
+	};
+
+	template <typename BaseFilter, typename Key, typename ...Params>
+	struct Filter : BaseFilter
+	{
+		explicit Filter(Key const &key, Params... params) : BaseFilter(params...), key_(key) {}
+
+		template <typename Lhs, typename Rhs>
+		constexpr bool apply(Lhs const &lhs, Rhs const &rhs) const
+		{
+			return (static_cast<BaseFilter const &>(*this))(key_(lhs), key_(rhs));
+		}
+
+		template <typename Lhs, typename Rhs>
+		constexpr bool next(Lhs const &lhs, Rhs const &rhs) const
+		{
+			return (static_cast<BaseFilter const &>(*this)).next(key_(lhs), key_(rhs));
+		}
+
+	private:
 		Key const &key_;
-		order_by_modifier(Key const &key) : key_(key) {}
 	};
 
-	template <typename Key>
-	auto const asc(Key const &key) noexcept(true) { return std::move(order_by_modifier<Key, order_type::asc>(key)); }
-	template <typename Key>
-	auto const desc(Key const &key) noexcept(true) { return std::move(order_by_modifier<Key, order_type::desc>(key)); }
-
-	template<typename In, typename Base>
-	struct order_by_modifier_end : public Base
+	template<typename In, typename Filter, typename... Filters>
+	constexpr  bool order_by_current(In const &a, In const &b, Filter const &key, Filters const &...keys) noexcept(true)
 	{
-		static constexpr order_type type = Base::ob_type;
-
-		order_by_modifier_end() = delete;
-		~order_by_modifier_end() = default;
-		order_by_modifier_end(order_by_modifier_end const &) = default;
-		order_by_modifier_end(Base const &key) : Base(key.key_) {}
-		order_by_modifier_end(typename Base::key_type const &key) : Base(key) {}
-
-		auto operator()(In val) const noexcept(true) { return this->key_(val); }
-
-	};
-
-
-	template<typename In, order_type OrderType>
-	struct order_by_less
-	{
-		constexpr bool operator()(const In a, const In b) const noexcept(true)
-		{
-			return a < b;
-		}
-	};
-	template<typename In>
-	struct order_by_less<In, order_type::desc>
-	{
-		constexpr bool operator()(const In a, const In b) const  noexcept(true)
-		{
-			return a > b;
-		}
-	};
-	template<typename In, typename Key1, typename Key2, typename... Keys>
-	constexpr bool order_by_next(In &a, In &b, Key1 const &key1, Key2 const &key2, Keys const &...keys) noexcept(true)
-	{
-		return key1(a) == key1(b) && (order_by_less<decltype(key2(a)), Key2::type>()(key2(a), key2(b)) || order_by_next(a, b, key2, keys...));
-	}
-	template<typename In, typename Key1, typename Key2>
-	constexpr bool order_by_next(In &a, In &b, Key1 const &key1, Key2 const &key2) noexcept(true)
-	{
-		return key1(a) == key1(b) && order_by_less<decltype(key2(a)), Key2::type>()(key2(a), key2(b));
-	}
-	template<typename In, typename Key, typename... Keys>
-	constexpr bool order_by(In &a, In &b, Key const &key, Keys const &...keys) noexcept(true)
-	{
-		return order_by_less<decltype(key(a)), Key::type>()(key(a), key(b)) || order_by_next(a, b, key, keys...);
+		return key.apply(a, b) || (key.next(a, b) && order_by_current(a, b, keys...));
 	}
 	template<typename In, typename Key>
-	constexpr bool order_by(In &a, In &b, Key const &key) noexcept(true)
+	constexpr bool order_by_current(In const &a, In const &b, Key const &key) noexcept(true)
 	{
-		return order_by_less<decltype(key(a)), Key::type>()(key(a), key(b));
+		return key.apply(a, b);
 	}
+
+	template <typename Key>
+	using asc_t = typename Filter<TFilter<eOrderType::asc>, Key>;
+	template <typename Key>
+	using desc_t = typename Filter<TFilter<eOrderType::desc>, Key>;
+
+	template <typename BaseFilter, typename Key, typename ...Params>
+	auto make_filter(Key const &key, Params... params) noexcept(true)
+	{
+		return Filter<BaseFilter, Key, Params...>(key, params...);
+	}
+	template <typename Key>
+	auto asc(Key const &key) noexcept(true) { return asc_t<Key>(key); }
+	template <typename Key>
+	auto desc(Key const &key) noexcept(true) { return desc_t<Key>(key); }
+
 	/*! utils */
 }
 

@@ -27,7 +27,7 @@ namespace linq
 			static_cast<Base &>(*this).operator++();
 			return (*this);
 		}
-		constexpr auto const operator++(int) noexcept(true) {
+		constexpr auto operator++(int) noexcept(true) {
 			auto tmp = *this;
 			operator++();
 			return (tmp);
@@ -36,7 +36,7 @@ namespace linq
 			static_cast<Base &>(*this).operator--();
 			return (*this);
 		}
-		constexpr auto const operator--(int) noexcept(true) {
+		constexpr auto operator--(int) noexcept(true) {
 			auto tmp = *this;
 			operator--();
 			return (tmp);
@@ -46,13 +46,13 @@ namespace linq
 
 	template<typename BaseIt>
 	class From
-		: public IState<basic_it<BaseIt>>
+		: public TState<basic_it<BaseIt>>
 	{
 	public:
 		typedef basic_it<BaseIt> iterator;
 		typedef iterator const_iterator;
 
-		using base_t = IState<iterator>;
+		using base_t = TState<iterator>;
 	public:
 		~From() = default;
 		From() = delete;

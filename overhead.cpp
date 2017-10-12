@@ -14,7 +14,7 @@ struct User
 	int category;
 	int likes;
 	int visits;
-	User(int seed)
+	explicit User(const int seed)
 		: id(seed), group(seed % 1024), category(seed % 128), likes(seed % 8192), visits((seed * 2) % 16384)
 	{
 	}
@@ -27,11 +27,11 @@ struct UserRandom
 	int category;
 	int likes;
 	int visits;
-	UserRandom(int seed)
-		: id(seed), group((int)(std::rand() * 1000.0 / RAND_MAX) % 1024),
-		category((int)(std::rand() * 1000.0 / RAND_MAX) % 128),
-		likes((int)(std::rand() * 1000.0 / RAND_MAX) % 8192),
-		visits((int)(std::rand() * 1000.0 / RAND_MAX) % 16384)
+	explicit UserRandom(const int seed)
+		: id(seed), group(static_cast<int>(std::rand() * 1000.0 / RAND_MAX) % 1024),
+		category(static_cast<int>(std::rand() * 1000.0 / RAND_MAX) % 128),
+		likes(static_cast<int>(std::rand() * 1000.0 / RAND_MAX) % 8192),
+		visits(static_cast<int>(std::rand() * 1000.0 / RAND_MAX) % 16384)
 	{
 	}
 };
@@ -355,6 +355,24 @@ struct Test<T, which::GroupBy>
 		});
 	}
 };
+
+struct CustomFilterAsc
+{
+	CustomFilterAsc(int , int) {}
+
+	template <typename Lhs, typename Rhs>
+	constexpr bool operator()(Lhs const &lhs, Rhs const &rhs) const noexcept(true)
+	{
+		return lhs < rhs;
+	}
+
+	template <typename Lhs, typename Rhs>
+	constexpr bool next(Lhs const &lhs, Rhs const &rhs) const noexcept(true)
+	{
+		return lhs == rhs;
+	}
+};
+
 template <typename T>
 struct Test<T, which::OrderBy>
 {
@@ -364,6 +382,7 @@ struct Test<T, which::OrderBy>
 		auto &data = context.get();
 
 		return test("Naive->OrderBy", [&]() noexcept(true) {
+			int result = 0;
 			std::sort(data.begin(), data.end(), [](T const &l, T const &r)
 			{
 				return l.group < r.group || (l.group == r.group && //asc 
@@ -371,18 +390,22 @@ struct Test<T, which::OrderBy>
 					((l.likes < r.likes || l.likes == r.likes) && //asc
 						l.visits > r.visits))); //desc
 			});
-			return 0;
+			for (const auto & it : data)
+				result += it.visits;
+
+			return result;
 		})
 		==
 		test("IEnum->OrderBy", [&]() {
-			linq::make_enumerable(data)
+
+
+			return linq::make_enumerable(data)
 				.OrderBy(
-					linq::asc([](const auto &key) noexcept(true) { return key.group; }),
+					linq::make_filter<CustomFilterAsc>([](const auto &key) noexcept(true) { return key.group; }, 10, 10),
 					linq::desc([](const auto &key) noexcept(true) { return key.category; }),
 					linq::asc([](const auto &key) noexcept(true) { return key.likes; }),
 					linq::desc([](const auto &key) noexcept(true) { return key.visits; })
-				);
-			return 0;
+				).Select([](const auto &key) { return key.visits; }).Sum();
 		});
 	}
 };
@@ -400,6 +423,12 @@ struct Test<T, which::Custom>
 				.Where([](auto const &tuple) { return std::get<0>(tuple) <= 100000; })
 				.OrderBy(linq::desc([](auto const &tuple) { return std::get<1>(tuple); }))
 				.Select([](auto const &tuple) { return std::get<0>(tuple); });
+			enu.Take(10)
+				.Each([](auto const &id) { std::cout << id << ","; })
+				.Skip(8)
+				.All()
+				.Reverse()
+				.Each([](auto const &id) { std::cout << id << ":"; });
 			int sum = 0;
 			if (enu.Contains(10000))
 				enu.TakeWhile([](auto const &val) { return val <= 100000; }).Each([&sum](auto const &) {  ++sum; });
@@ -443,7 +472,7 @@ void executeTests()
 
 int main(int, char *[])
 {
-	std::srand(time(0));
+	std::srand(time(nullptr));
 	std::cout << "# Overhead Tests" << std::endl;
 	executeTests();
 	system("pause");

@@ -16,7 +16,7 @@ namespace linq
 		all_it() = delete;
 		all_it(all_it const &) = default;
 		all_it(Base const &base, Proxy proxy) noexcept(true)
-			: Base(base), _proxy(proxy)
+			: Base(base), proxy_(proxy)
 		{}
 
 		constexpr auto const &operator=(all_it const &rhs) noexcept(true) {
@@ -27,7 +27,7 @@ namespace linq
 			static_cast<Base &>(*this).operator++();
 			return (*this);
 		}
-		constexpr auto const operator++(int) noexcept(true) {
+		constexpr auto operator++(int) noexcept(true) {
 			auto tmp = *this;
 			operator++();
 			return (tmp);
@@ -36,23 +36,23 @@ namespace linq
 			static_cast<Base &>(*this).operator--();
 			return (*this);
 		}
-		constexpr auto const operator--(int) noexcept(true) {
+		constexpr auto operator--(int) noexcept(true) {
 			auto tmp = *this;
 			operator--();
 			return (tmp);
 		}
 	
 	private:
-		Proxy _proxy;
+		Proxy proxy_;
 	};
 
 	template<typename BaseIt, typename Proxy>
-	class All : public IState<all_it<BaseIt, Proxy>>{
+	class All : public TState<all_it<BaseIt, Proxy>>{
 	public:
 		typedef all_it<BaseIt, Proxy> iterator;
 		typedef iterator const_iterator;
 
-		using base_t = IState<iterator>;
+		using base_t = TState<iterator>;
 	public:
 		~All() = default;
 		All() = delete;

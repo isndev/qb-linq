@@ -16,7 +16,7 @@ namespace linq
 		where_it() = delete;
 		where_it(where_it const &) = default;
 		where_it(Base const &base, Base const &begin, Base const &end, Filter const &filter) noexcept(true)
-			: Base(base), _begin(begin), _end(end), _filter(filter) {}
+			: Base(base), begin_(begin), end_(end), filter_(filter) {}
 		
 		constexpr auto const &operator=(where_it const &rhs) noexcept(true) {
 			static_cast<Base>(*this) = static_cast<Base const &>(rhs);
@@ -26,10 +26,10 @@ namespace linq
 			do
 			{
 				static_cast<Base &>(*this).operator++();
-			} while (static_cast<Base const &>(*this) != _end && !_filter(*static_cast<Base const &>(*this)));
+			} while (static_cast<Base const &>(*this) != end_ && !filter_(*static_cast<Base const &>(*this)));
 			return *this;
 		}
-		constexpr auto const operator++(int) noexcept(true)
+		constexpr auto operator++(int) noexcept(true)
 		{
 			auto tmp = *this;
 			operator++();
@@ -39,10 +39,10 @@ namespace linq
 			do
 			{
 				static_cast<Base &>(*this).operator--();
-			} while (static_cast<Base const &>(*this) != _begin && !_filter(*static_cast<Base const &>(*this)));
+			} while (static_cast<Base const &>(*this) != begin_ && !filter_(*static_cast<Base const &>(*this)));
 			return *this;
 		}
-		constexpr auto const operator--(int) noexcept(true)
+		constexpr auto operator--(int) noexcept(true)
 		{
 			auto tmp = *this;
 			operator--();
@@ -50,18 +50,18 @@ namespace linq
 		}
 
 	private:
-		Base const _begin;
-		Base const _end;
-		Filter const _filter;
+		Base const begin_;
+		Base const end_;
+		Filter const filter_;
 	};
 
 	template<typename BaseIt, typename Filter>
-	class Where : public IState<where_it<BaseIt, Filter>> {
+	class Where : public TState<where_it<BaseIt, Filter>> {
 	public:
 		typedef where_it<BaseIt, Filter> iterator;
 		typedef iterator const_iterator;
 
-		using base_t = IState<iterator>;
+		using base_t = TState<iterator>;
 	public:
 		~Where() = default;
 		Where() = delete;

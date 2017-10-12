@@ -16,7 +16,7 @@
 namespace linq
 {
 	template<typename Iterator>
-	class IState;
+	class TState;
 }
 
 # include "linq/All.h"
@@ -24,22 +24,22 @@ namespace linq
 # include "linq/Where.h"
 # include "linq/Take.h"
 # include "linq/From.h"
-# include "linq/IState.h"
-# include "linq/IEnumerable.h"
+# include "linq/TState.h"
+# include "linq/TEnumerable.h"
 
 namespace linq
 {
 	template<typename T>
 	auto make_enumerable(T const &container) {
-		return std::move(IEnumerable<From<typename T::const_iterator>>(From<typename T::const_iterator>(std::begin(container), std::end(container))));
+		return std::move(TEnumerable<From<typename T::const_iterator>>(From<typename T::const_iterator>(std::begin(container), std::end(container))));
 	}
 	template<typename T>
 	auto make_enumerable(T &container) {
-		return std::move(IEnumerable<From<typename T::iterator>>(From<typename T::iterator>(std::begin(container), std::end(container))));
+		return std::move(TEnumerable<From<typename T::iterator>>(From<typename T::iterator>(std::begin(container), std::end(container))));
 	}
 	template<typename T>
 	auto make_enumerable(T const &begin, T const &end) {
-		return std::move(IEnumerable<From<T>>(From<T>(begin, end)));
+		return std::move(TEnumerable<From<T>>(From<T>(begin, end)));
 	}
 
 	template<typename T>

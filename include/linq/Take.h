@@ -65,7 +65,7 @@ namespace linq
 
 		take_it() = delete;
 		take_it(const take_it &) = default;
-		take_it(Base const &base, int const max) noexcept(true) : Base(base), _max(-max)
+		take_it(Base const &base, int const max) noexcept(true) : Base(base), max_(-max)
 		{}
 
 		constexpr auto const &operator=(take_it const &rhs) noexcept(true) {
@@ -76,7 +76,7 @@ namespace linq
 			static_cast<Base &>(*this).operator++();
 			return (*this);
 		}
-		constexpr auto const operator++(int) noexcept(true) {
+		constexpr auto operator++(int) noexcept(true) {
 			auto tmp = *this;
 			operator++();
 			return (tmp);
@@ -85,29 +85,29 @@ namespace linq
 			static_cast<Base &>(*this).operator--();
 			return (*this);
 		}
-		constexpr auto const operator--(int) noexcept(true) {
+		constexpr auto operator--(int) noexcept(true) {
 			auto tmp = *this;
 			operator--();
 			return (tmp);
 		}
 		constexpr bool operator!=(take_it const &rhs) const noexcept(true) {
-			return  static_cast<Base const &>(*this) != static_cast<Base const &>(rhs) && _max++ < 0;
+			return  static_cast<Base const &>(*this) != static_cast<Base const &>(rhs) && max_++ < 0;
 		}
 		constexpr bool operator==(take_it const &rhs) const noexcept(true) {
-			return  static_cast<Base const &>(*this) == static_cast<Base const &>(rhs) || _max++ >= 0;
+			return  static_cast<Base const &>(*this) == static_cast<Base const &>(rhs) || max_++ >= 0;
 		}
 	
 	private:
-		mutable int _max;
+		mutable int max_;
 	};
 
 	template <typename Base, typename In = int>
-	class Take : public IState<take_it<Base, In>> {
+	class Take : public TState<take_it<Base, In>> {
 	public:
 		typedef take_it<Base, In> iterator;
 		typedef iterator const_iterator;
 
-		using base_t = IState<iterator>;
+		using base_t = TState<iterator>;
 	public:
 		~Take() = default;
 		Take() = delete;

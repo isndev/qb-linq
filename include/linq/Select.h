@@ -16,7 +16,7 @@ namespace linq
 		select_it() = delete;
 		select_it(select_it const &rhs) = default;
 		select_it(Base const &base, Loader const &loader) noexcept(true)
-			: Base(base), _loader(loader)
+			: Base(base), loader_(loader)
 		{}
 
 		constexpr auto const &operator=(select_it const &rhs) noexcept(true) {
@@ -27,7 +27,7 @@ namespace linq
 			static_cast<Base &>(*this).operator++();
 			return (*this);
 		}
-		constexpr auto const operator++(int) noexcept(true) {
+		constexpr auto operator++(int) noexcept(true) {
 			auto tmp = *this;
 			operator++();
 			return (tmp);
@@ -36,31 +36,31 @@ namespace linq
 			static_cast<Base &>(*this).operator--();
 			return (*this);
 		}
-		constexpr auto const operator--(int) noexcept(true) {
+		constexpr auto operator--(int) noexcept(true) {
 			auto tmp = *this;
 			operator--();
 			return (tmp);
 		}
 		constexpr value_type operator*() const noexcept(true) {
-			return _loader(*static_cast<Base const &>(*this));
+			return loader_(*static_cast<Base const &>(*this));
 		}
 		constexpr value_type operator->() const noexcept(true) {
 			return *(*this);
 		}
 	
 	private:
-		Loader const _loader;
+		Loader const loader_;
 	};
 
 	template<typename BaseIt, typename Loader>
 	class Select
-		: public IState<select_it<BaseIt, Loader>>
+		: public TState<select_it<BaseIt, Loader>>
 	{
 	public:
 		typedef select_it<BaseIt, Loader> iterator;
 		typedef iterator const_iterator;
 
-		using base_t = IState<iterator>;
+		using base_t = TState<iterator>;
 	public:
 		~Select() = default;
 		Select() = delete;
