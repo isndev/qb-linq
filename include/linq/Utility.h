@@ -144,9 +144,9 @@ namespace linq
 	}
 
 	template <typename Key>
-	using asc_t = typename Filter<TFilter<eOrderType::asc>, Key>;
+	using asc_t = Filter<TFilter<eOrderType::asc>, Key>;
 	template <typename Key>
-	using desc_t = typename Filter<TFilter<eOrderType::desc>, Key>;
+	using desc_t = Filter<TFilter<eOrderType::desc>, Key>;
 
 	template <typename BaseFilter, typename Key, typename ...Params>
 	auto make_filter(Key const &key, Params... params) noexcept(true)
