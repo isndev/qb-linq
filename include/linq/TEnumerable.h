@@ -4,7 +4,7 @@
 namespace linq
 {
 	template <typename Handle>
-	class TEnumerable : public Handle
+	class TEnumerable : private Handle
 	{
 		typedef typename Handle::iterator iterator_type;
 		typedef decltype(*std::declval<iterator_type>()) out_t;
