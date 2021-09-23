@@ -25,35 +25,39 @@ namespace linq
 # include "linq/Take.h"
 # include "linq/From.h"
 # include "linq/TState.h"
-# include "linq/TEnumerable.h"
+# include "linq/Enumerable.h"
 
 namespace linq
 {
     template<typename T>
-    auto make_enumerable(T const &container) {
-        return std::move(TEnumerable<From<typename T::const_iterator>>(From<typename T::const_iterator>(std::begin(container), std::end(container))));
-    }
-    template<typename T>
-    auto make_enumerable(T &container) {
-        return std::move(TEnumerable<From<typename T::iterator>>(From<typename T::iterator>(std::begin(container), std::end(container))));
-    }
-    template<typename T>
-    auto make_enumerable(T const &begin, T const &end) {
-        return std::move(TEnumerable<From<T>>(From<T>(begin, end)));
+    auto make_enumerable(T const& container) {
+        return Enumerable<From<typename T::const_iterator>>(From<typename T::const_iterator>(std::cbegin(container), std::cend(container)));
     }
 
     template<typename T>
-    auto from(T const &container) {
-        return std::move(linq::From<typename T::const_iterator>(std::begin(container), std::end(container)));
+    auto make_enumerable(T& container) {
+        return Enumerable<From<typename T::iterator>>(From<typename T::iterator>(std::begin(container), std::end(container)));
     }
+
     template<typename T>
-    auto from(T &container) {
-        return std::move(linq::From<typename T::iterator>(std::begin(container), std::end(container)));
+    auto make_enumerable(T const& begin, T const& end) {
+        return Enumerable<From<T>>(From<T>(begin, end));
     }
+
     template<typename T>
-    auto range(T const &begin, T const &end) {
-        return std::move(linq::From<T>(begin, end));
+    auto from(T const& container) {
+        return linq::From<typename T::const_iterator>(std::cbegin(container), std::cend(container));
     }
-}
+
+    template<typename T>
+    auto from(T& container) {
+        return linq::From<typename T::iterator>(std::begin(container), std::end(container));
+    }
+
+    template<typename T>
+    auto range(T const& begin, T const& end) {
+        return linq::From<T>(begin, end);
+    }
+} // namespace linq
 
 #endif // !LINQ_H_

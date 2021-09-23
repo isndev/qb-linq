@@ -30,7 +30,7 @@ auto time(F f) {
 }
 
 template<typename F>
-auto test(const std::string &name, F f, std::ostream &os = std::cout) {
+auto test(const std::string& name, F f, std::ostream& os = std::cout) {
     os << "Running test '" << name << "' \t";
     os.flush();
 
@@ -42,7 +42,7 @@ auto test(const std::string &name, F f, std::ostream &os = std::cout) {
         os << "-> Success" << std::endl;
         return result.second;
     }
-    catch (const std::exception &e) {
+    catch (const std::exception& e) {
         os << "-> Failed !" << std::endl;
         os << "\t => " << e.what() << std::endl;
         return decltype(f()){};

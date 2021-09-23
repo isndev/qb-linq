@@ -22,7 +22,7 @@ namespace linq
         using Out = decltype(std::declval<KeyLoader>()(std::declval<In>()));
         typedef typename map_type<Out, typename group_by<In, Funcs...>::type, std::is_fundamental<Out>::value>::type type;
 
-        constexpr static void emplace(type &handle, In const &val, KeyLoader const &func, Funcs const &...funcs) noexcept(true)
+        static void emplace(type& handle, In const& val, KeyLoader const& func, Funcs const &...funcs) noexcept
         {
             group_by<In, Funcs...>::emplace(handle[func(val)], val, funcs...);
         }
@@ -33,7 +33,7 @@ namespace linq
         using Out = decltype(std::declval<KeyLoader>()(std::declval<In>()));
         typedef typename map_type<Out, typename group_by<In>::type, std::is_fundamental<Out>::value>::type type;
 
-        constexpr static void emplace(type &handle, In const &val, KeyLoader const &func) noexcept(true)
+        static void emplace(type& handle, In const& val, KeyLoader const& func) noexcept
         {
             group_by<In>::emplace(handle[func(val)], val);
         }
@@ -43,7 +43,7 @@ namespace linq
     {
         typedef std::vector<typename std::remove_reference<In>::type> type;
 
-        constexpr static void emplace(type &vec, In const &val) noexcept(true)
+        static void emplace(type& vec, In const& val) noexcept
         {
             vec.push_back(val);
         }
@@ -68,7 +68,7 @@ namespace linq
     struct FilterBase
     {
         template <typename Lhs, typename Rhs>
-        constexpr bool next(Lhs const &lhs, Rhs const &rhs) const noexcept(true)
+        bool next(Lhs const& lhs, Rhs const& rhs) const noexcept
         {
             return lhs == rhs;
         }
@@ -78,7 +78,7 @@ namespace linq
     struct TFilter<eOrderType::asc> : FilterBase
     {
         template <typename Lhs, typename Rhs>
-        constexpr bool operator()(Lhs const &lhs, Rhs const &rhs) const noexcept(true)
+        bool operator()(Lhs const& lhs, Rhs const& rhs) const noexcept
         {
             return lhs < rhs;
         }
@@ -88,7 +88,7 @@ namespace linq
     struct TFilter<eOrderType::desc> : FilterBase
     {
         template <typename Lhs, typename Rhs>
-        constexpr bool operator()(Lhs const &lhs, Rhs const &rhs) const noexcept(true)
+        bool operator()(Lhs const& lhs, Rhs const& rhs) const noexcept
         {
             return lhs > rhs;
         }
@@ -99,13 +99,13 @@ namespace linq
     struct TFilter<eOrderType::custom>
     {
         template <typename Lhs, typename Rhs>
-        constexpr bool operator()(Lhs const &lhs, Rhs const &rhs) const noexcept(true)
+        bool operator()(Lhs const& lhs, Rhs const& rhs) const noexcept
         {
             return false;
         }
 
         template <typename Lhs, typename Rhs>
-        constexpr bool next(Lhs const &lhs, Rhs const &rhs) const noexcept(true)
+        bool next(Lhs const& lhs, Rhs const& rhs) const noexcept
         {
             return false;
         }
@@ -114,31 +114,31 @@ namespace linq
     template <typename BaseFilter, typename Key, typename ...Params>
     struct Filter : BaseFilter
     {
-        explicit Filter(Key const &key, Params... params) : BaseFilter(params...), key_(key) {}
+        explicit Filter(Key const& key, Params &&...params) : BaseFilter(std::forward<Params>(params)...), key_(key) {}
 
         template <typename Lhs, typename Rhs>
-        constexpr bool apply(Lhs const &lhs, Rhs const &rhs) const
+        bool apply(Lhs const& lhs, Rhs const& rhs) const
         {
-            return (static_cast<BaseFilter const &>(*this))(key_(lhs), key_(rhs));
+            return (static_cast<BaseFilter const&>(*this))(key_(lhs), key_(rhs));
         }
 
         template <typename Lhs, typename Rhs>
-        constexpr bool next(Lhs const &lhs, Rhs const &rhs) const
+        bool next(Lhs const& lhs, Rhs const& rhs) const
         {
-            return (static_cast<BaseFilter const &>(*this)).next(key_(lhs), key_(rhs));
+            return (static_cast<BaseFilter const&>(*this)).next(key_(lhs), key_(rhs));
         }
 
     private:
-        Key const &key_;
+        Key const& key_;
     };
 
     template<typename In, typename Filter, typename... Filters>
-    constexpr  bool order_by_current(In const &a, In const &b, Filter const &key, Filters const &...keys) noexcept(true)
+    bool order_by_current(In const& a, In const& b, Filter const& key, Filters &&...keys) noexcept
     {
-        return key.apply(a, b) || (key.next(a, b) && order_by_current(a, b, keys...));
+        return key.apply(a, b) || (key.next(a, b) && order_by_current(a, b, std::forward<Filters>(keys)...));
     }
     template<typename In, typename Key>
-    constexpr bool order_by_current(In const &a, In const &b, Key const &key) noexcept(true)
+    bool order_by_current(In const& a, In const& b, Key const& key) noexcept
     {
         return key.apply(a, b);
     }
@@ -149,14 +149,14 @@ namespace linq
     using desc_t = Filter<TFilter<eOrderType::desc>, Key>;
 
     template <typename BaseFilter, typename Key, typename ...Params>
-    auto make_filter(Key const &key, Params... params) noexcept(true)
+    auto make_filter(Key const& key, Params &&...params) noexcept
     {
-        return Filter<BaseFilter, Key, Params...>(key, params...);
+        return Filter<BaseFilter, Key, Params...>(key, std::forward<Params>(params)...);
     }
     template <typename Key>
-    auto asc(Key const &key) noexcept(true) { return asc_t<Key>(key); }
+    auto asc(Key const& key) noexcept { return asc_t<Key>(key); }
     template <typename Key>
-    auto desc(Key const &key) noexcept(true) { return desc_t<Key>(key); }
+    auto desc(Key const& key) noexcept { return desc_t<Key>(key); }
 
     /*! utils */
 }

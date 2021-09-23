@@ -3,3 +3,6 @@
 Debug
 x64
 .vs
+.idea
+out
+cmake-build-*

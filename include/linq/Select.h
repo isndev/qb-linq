@@ -1,61 +1,69 @@
 #ifndef SELECT_H_
 # define SELECT_H_
 
-namespace linq
-{
-    template <typename Base, typename Loader>
+namespace linq {
+    template<typename T, bool value = std::is_reference<T>::value>
+    struct is_ref {
+        typedef T type;
+    };
+
+    template<typename T>
+    struct is_ref<T, false> {
+        typedef std::remove_reference_t<T> type;
+    };
+
+    template<typename Base, typename Loader>
     class select_it : public Base {
     public:
         typedef Base base;
-        typedef typename Base::iterator_category                            iterator_category;
-        typedef decltype(std::declval<Loader>()(*std::declval<Base>()))        value_type;
-        typedef typename Base::difference_type                                difference_type;
-        typedef typename Base::pointer                                        pointer;
-        typedef value_type                                                     reference;
+        typedef decltype(std::declval<Loader>()(*std::declval<Base>())) original_type;
+        typedef typename Base::iterator_category iterator_category;
+        typedef typename std::remove_reference<original_type>::type value_type;
+        typedef typename Base::difference_type difference_type;
+        typedef value_type* pointer;
+        typedef typename is_ref<original_type>::type reference;
 
         select_it() = delete;
-        select_it(select_it const &rhs) = default;
-        select_it(Base const &base, Loader const &loader) noexcept(true)
-                : Base(base), loader_(loader)
-        {}
+        select_it(select_it const& rhs) = default;
+        select_it(Base const& base, Loader const& loader) noexcept
+            : Base(base), loader_(loader) {}
 
-        constexpr auto const &operator=(select_it const &rhs) noexcept(true) {
-            static_cast<Base>(*this) = static_cast<Base const &>(rhs);
+        auto& operator=(select_it const& rhs) noexcept {
+            static_cast<Base>(*this) = static_cast<Base const&>(rhs);
             return *this;
         }
-        constexpr auto const &operator++() noexcept(true) {
-            static_cast<Base &>(*this).operator++();
+        auto& operator++() noexcept {
+            static_cast<Base&>(*this).operator++();
             return (*this);
         }
-        constexpr auto operator++(int) noexcept(true) {
+        auto operator++(int) noexcept {
             auto tmp = *this;
             operator++();
             return (tmp);
         }
-        constexpr auto const &operator--() noexcept(true) {
-            static_cast<Base &>(*this).operator--();
+        auto& operator--() noexcept {
+            static_cast<Base&>(*this).operator--();
             return (*this);
         }
-        constexpr auto operator--(int) noexcept(true) {
+        auto operator--(int) noexcept {
             auto tmp = *this;
             operator--();
             return (tmp);
         }
-        constexpr value_type operator*() const noexcept(true) {
-            return loader_(*static_cast<Base const &>(*this));
+        const reference operator*() const noexcept {
+            return loader_(*static_cast<Base const&>(*this));
         }
-        constexpr value_type operator->() const noexcept(true) {
-            return *(*this);
+        reference operator*() noexcept {
+            return loader_(*static_cast<Base&>(*this));
         }
 
     private:
-        Loader const loader_;
+        Loader loader_;
     };
 
     template<typename BaseIt, typename Loader>
     class Select
-            : public TState<select_it<BaseIt, Loader>>
-    {
+        : public TState<select_it<BaseIt, Loader>> {
     public:
         typedef select_it<BaseIt, Loader> iterator;
         typedef iterator const_iterator;
@@ -63,14 +71,12 @@ namespace linq
         using base_t = TState<iterator>;
     public:
         ~Select() = default;
-        Select() = delete;
-        Select(Select const &rhs)
-                : base_t(static_cast<base_t const &>(rhs))
-        {}
 
-        Select(BaseIt const &begin, BaseIt const &end, Loader const &loader)
-                : base_t(iterator(begin, loader), iterator(end, loader))
-        {}
+        Select() = delete;
+        Select(Select const& rhs) noexcept
+            : base_t(static_cast<base_t const&>(rhs)) {}
+        Select(BaseIt const& begin, BaseIt const& end, Loader const& loader)
+            : base_t(iterator(begin, loader), iterator(end, loader)) {}
     };
 }
 
