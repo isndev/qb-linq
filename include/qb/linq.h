@@ -1,0 +1,74 @@
+#pragma once
+
+/**
+ * @file linq.h
+ * @ingroup linq
+ * @brief Public umbrella header: `#include <qb/linq.h>` pulls in `qb::linq::enumerable` and the full pipeline API.
+ *
+ * @details
+ * Implementation headers live under `include/qb/linq/`. Consumers should depend only on this file and the
+ * documented `qb::linq` API. Build reference: CMake option `QB_LINQ_BUILD_DOCS=ON`, target `qb_linq_docs`, or
+ * configure preset **docs** in `CMakePresets.json`. HTML output: `doc_doxygen/html` under the build directory.
+ */
+
+/**
+ * @defgroup qb qb (framework)
+ * @brief Parent group for libraries under the **qb** framework. This repo contributes the **linq** module below.
+ */
+
+/**
+ * @defgroup linq qb/linq
+ * @ingroup qb
+ * @brief Library (`namespace qb::linq`): lazy, composable LINQ-style query pipelines for C++17 (no `std::ranges`).
+ *
+ * @par Architecture
+ * - **Lazy views** (`select`, `where`, `skip`, `take`, …) are cheap to build; work runs when iterators are
+ *   advanced or a **terminal** runs (`sum`, `first`, `to_vector`, …).
+ * - **CRTP** `qb::linq::detail::query_range_algorithms` routes algorithms through `begin()`/`end()`, so
+ *   `where_view` can be O(1) to construct and pay `find_if` only on the first `begin()` (cached).
+ * - **Fused terminals** (`sum_if`, `count_if`, `any_if`, `all_if`, `aggregate`/`fold`) fold in **one pass**
+ *   without a `where_iterator` chain — prefer them on hot paths when you only need the aggregate.
+ * - **Extra views** (`concat`, `zip`, `scan`, `chunk`, `stride`, `distinct`, `default_if_empty`, `enumerate`,
+ *   `append`/`prepend`), `of_type<U>`, and set-style helpers (`except`, `intersect`, `union_with`, `join`,
+ *   `group_join`, `to_lookup`) live in `qb/linq/detail/extra_views.h` and `qb/linq/query.h`.
+ * - **Factories:** `qb::linq::empty<T>()`, `once`, `repeat`, `from`, `as_enumerable`, `iota`.
+ * - **Materializing:** `take_last`/`skip_last`, `to_map`, `to_unordered_map`, `to_dictionary`, `to_set`/
+ *   `to_unordered_set`.
+ * - **Terminals:** `reduce`, `min`/`max`/`min_max`, `average_if`, percentiles, variance, `sequence_equal`,
+ *   `contains`, etc.
+ *
+ * @par Usage
+ * Add `-I` to the parent of `qb/`, or `target_link_libraries(… qb::linq)`. Then `qb::linq::from(container)`,
+ * `as_enumerable`, `iota`, and methods on `enumerable`.
+ *
+ * @par Caveats (read before advanced composition)
+ * - **`select_many`** does **not** flatten nested sequences like C# `SelectMany`. It yields a **tuple** of
+ *   projections per element (one value per loader). Use `select` + `concat` / nested loops for true
+ *   flattening.
+ * - Terminals such as `first()`, `last()`, `element_at()`, `single()` may return **`reference`** (via
+ *   `decltype(auto)` through `enumerable`). Do not store those references past iterator invalidation —
+ *   same rules as holding references into a live container or a `select` projection.
+ * - **`sum` / `sum_if`** require `value_type` to be default-constructible and to support `operator+=`.
+ * - **`except` / `intersect`** build `std::unordered_set<value_type>`: elements must be **hashable** and
+ *   comparable for lookup (as `std::unordered_set` requires).
+ * - **`zip` / `concat`** store nested iterators that may be **copy-assigned** during iteration. Functors
+ *   inside the inner range (e.g. `where` / `select` on the RHS) must be **copy-assignable** — use stateless
+ *   lambdas decayed to function pointers (`+[](…){…}`) or named function objects when composing pipelines
+ *   as the inner operand.
+ * - Views are **not** thread-safe; `where_view` caches the first matching position on the first `begin()`.
+ *   Do not share a pipeline across threads without external synchronization.
+ *
+ * @par Implementation map (headers)
+ * | Area | Header |
+ * |------|--------|
+ * | Public façade, factories | `qb/linq/enumerable.h` |
+ * | Range handles, `materialized_range`, `iota` | `qb/linq/query.h` |
+ * | Algorithms CRTP | `qb/linq/detail/query_range.h` |
+ * | Iterator adaptors | `qb/linq/iterators.h` |
+ * | Extra lazy views (`concat`, `zip`, `scan`, …) | `qb/linq/detail/extra_views.h` |
+ * | `group_by` map shape | `qb/linq/detail/group_by.h` |
+ * | `order_by` keys | `qb/linq/detail/order.h` |
+ * | Iterator / projection aliases | `qb/linq/detail/type_traits.h` |
+ */
+
+#include "qb/linq/enumerable.h"

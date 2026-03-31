@@ -1,8 +1,101 @@
+# -----------------------------------------------------------------------------
+# qb-linq — C++ / CMake (local build artifacts & IDE noise)
+# -----------------------------------------------------------------------------
+
+# CMake / Ninja / Make (out-of-source builds)
+build/
+build-*/
+out/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+CMakeUserPresets.json
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+_deps/
+Testing/
+
+# Generated (optional: some teams commit root compile_commands.json)
+compile_commands.json
+
+# Ninja
+.ninja_deps
+.ninja_log
+rules.ninja
+
+# Compiled objects & binaries
+*.o
+*.obj
+*.lo
+*.slo
+*.ko
+*.a
+*.lib
+*.dll
+*.so
+*.so.*
+*.dylib
+*.exe
+*.out
+*.app
+
+# Precompiled headers
+*.gch
+*.pch
+
+# Linker / debug
+*.ilk
+*.pdb
+*.exp
+*.idb
+
+# Coverage / sanitizers (if enabled locally)
+*.gcno
+*.gcda
+*.gcov
+*.profraw
+*.profdata
+
+# MSVC
+.vs/
 *.vcxproj*
+*.vcproj*
 *.sln
-Debug
-x64
-.vs
-.idea
-out
-cmake-build-*
+*.suo
+*.user
+*.userosscache
+x64/
+x86/
+Debug/
+Release/
+RelWithDebInfo/
+MinSizeRel/
+*.aps
+
+# Clang / LLVM
+.cache/
+
+# Doxygen output (if generated under repo tree)
+doc/html/
+doc/latex/
+doc/man/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors (machine-local; keep shared .vscode/*.json in repo if your team uses them)
+.idea/
+*.swp
+*.swo
+*~
+
+# Package managers (if used beside the tree)
+vcpkg_installed/
+conan/
+
+# Python / tooling venvs sometimes created next to build
+.venv/
+venv/

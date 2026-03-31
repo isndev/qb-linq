@@ -1,0 +1,276 @@
+/* qb-linq — presentation layer on Doxygen Awesome (typography, layout, components). */
+
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap");
+
+html {
+    --primary-color: #0d9488;
+    --primary-dark-color: #0f766e;
+    --primary-light-color: #5eead4;
+    --on-primary-color: #f8fafc;
+
+    --page-foreground-color: #0f172a;
+    --page-secondary-foreground-color: #64748b;
+    --page-background-color: #fafbfc;
+
+    --separator-color: #e2e8f0;
+    --side-nav-background: #f8fafc;
+
+    --border-radius-large: 14px;
+    --border-radius-medium: 10px;
+    --border-radius-small: 6px;
+    --box-shadow: 0 4px 24px rgba(15, 23, 42, 0.055);
+    --box-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06);
+
+    --qb-content-pad-x: clamp(1rem, 3vw, 2.25rem);
+    --qb-content-pad-y: clamp(0.75rem, 2vw, 1.5rem);
+
+    font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    font-feature-settings: "kern" 1, "liga" 1;
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+}
+
+html.dark-mode {
+    --primary-color: #2dd4bf;
+    --primary-dark-color: #14b8a6;
+    --primary-light-color: #99f6e4;
+    --page-foreground-color: #e2e8f0;
+    --page-secondary-foreground-color: #94a3b8;
+    --page-background-color: #0f172a;
+    --separator-color: #334155;
+    --side-nav-background: #1e293b;
+    --box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    --box-shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+::selection {
+    background: color-mix(in srgb, var(--primary-color) 30%, transparent);
+    color: inherit;
+}
+
+:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+body,
+#side-nav,
+div.fragment,
+pre.fragment,
+.memitem,
+.memdoc,
+table.markdownTable {
+    font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+}
+
+code,
+tt,
+pre,
+.memtemplate,
+.paramname,
+.paramtype,
+.mlabels,
+.fieldtable,
+.directory .desc {
+    font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* ----- Top bar / identity ----- */
+#titlearea {
+    padding: 0.65rem 0;
+    border-bottom: 1px solid var(--separator-color);
+    background: linear-gradient(180deg, var(--page-background-color) 0%, color-mix(in srgb, var(--page-background-color) 92%, var(--primary-color)) 100%);
+    box-shadow: var(--box-shadow-sm);
+}
+
+html.dark-mode #titlearea {
+    background: linear-gradient(180deg, var(--page-background-color) 0%, #1e293b 100%);
+}
+
+#projectlogo img {
+    border-radius: var(--border-radius-medium);
+    box-shadow: var(--box-shadow-sm);
+}
+
+#projectname {
+    font-weight: 600;
+    font-size: 1.35rem;
+    letter-spacing: -0.02em;
+    color: var(--page-foreground-color);
+}
+
+#projectnumber {
+    font-weight: 500;
+    opacity: 0.75;
+    font-size: 0.92em;
+}
+
+#projectbrief {
+    font-size: 0.82rem;
+    font-weight: 400;
+    color: var(--page-secondary-foreground-color);
+    line-height: 1.45;
+    max-width: 42rem;
+    margin-top: 0.2rem;
+}
+
+/* ----- Main reading column ----- */
+#doc-content .contents {
+    padding-left: var(--qb-content-pad-x);
+    padding-right: var(--qb-content-pad-x);
+    padding-top: var(--qb-content-pad-y);
+}
+
+@media screen and (min-width: 1100px) {
+    #doc-content > div > div.contents,
+    #doc-content .contents {
+        max-width: min(56rem, 100%);
+    }
+}
+
+div.contents .title,
+div.contents h1,
+div.headertitle .title {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    border-bottom: 1px solid var(--separator-color);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+div.contents h2 {
+    font-weight: 600;
+    font-size: 1.2rem;
+    margin-top: 1.75rem;
+    color: var(--page-foreground-color);
+}
+
+div.contents h3 {
+    font-weight: 600;
+    font-size: 1.05rem;
+    margin-top: 1.35rem;
+}
+
+a,
+a.el,
+a.el:visited {
+    text-underline-offset: 0.18em;
+    text-decoration-thickness: 1px;
+}
+
+a:hover {
+    text-decoration-thickness: 2px;
+}
+
+/* ----- Code & fragments ----- */
+div.fragment,
+pre.fragment {
+    border-radius: var(--border-radius-medium);
+    border: 1px solid var(--separator-color);
+    border-left: 4px solid var(--primary-color);
+    box-shadow: var(--box-shadow-sm);
+    background: color-mix(in srgb, var(--page-background-color) 88%, var(--primary-color)) !important;
+}
+
+html.dark-mode div.fragment,
+html.dark-mode pre.fragment {
+    background: color-mix(in srgb, var(--side-nav-background) 85%, var(--primary-dark-color)) !important;
+}
+
+div.line,
+span.lineno {
+    font-size: 0.88rem;
+}
+
+/* ----- API blocks ----- */
+.memitem {
+    border-radius: var(--border-radius-large);
+    border: 1px solid var(--separator-color);
+    box-shadow: var(--box-shadow-sm);
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.memproto,
+.memdoc {
+    border-radius: 0;
+}
+
+.memSeparator {
+    border-color: var(--separator-color);
+}
+
+/* ----- Markdown tables (README etc.) ----- */
+table.markdownTable {
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: var(--border-radius-medium);
+    overflow: hidden;
+    border: 1px solid var(--separator-color);
+    box-shadow: var(--box-shadow-sm);
+    margin: 1rem 0;
+}
+
+table.markdownTable th {
+    background: color-mix(in srgb, var(--page-background-color) 75%, var(--primary-color));
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+html.dark-mode table.markdownTable th {
+    background: color-mix(in srgb, var(--side-nav-background) 80%, var(--primary-dark-color));
+}
+
+table.markdownTable tr:nth-child(even) td {
+    background: color-mix(in srgb, var(--page-background-color) 96%, var(--primary-color));
+}
+
+html.dark-mode table.markdownTable tr:nth-child(even) td {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+table.markdownTable td,
+table.markdownTable th {
+    padding: 0.55rem 0.85rem;
+    border-color: var(--separator-color);
+}
+
+div.contents > div:first-child table,
+div.contents .markdownTable {
+    max-width: 100%;
+}
+
+/* ----- Search ----- */
+#MSearchBox {
+    border-radius: var(--border-radius-medium);
+}
+
+#MSearchField {
+    border-radius: var(--border-radius-small) !important;
+}
+
+/* ----- Nav tree polish ----- */
+#nav-tree .selected a {
+    font-weight: 600;
+}
+
+#nav-tree .item:hover {
+    transition: background-color 0.12s ease;
+}
+
+/* ----- Directory / file pages ----- */
+.directory tr.even,
+.directory tr.odd {
+    transition: background-color 0.1s ease;
+}
+
+.directory tr:hover {
+    background: color-mix(in srgb, var(--primary-color) 8%, transparent) !important;
+}

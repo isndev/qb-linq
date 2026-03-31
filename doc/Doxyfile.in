@@ -1,0 +1,84 @@
+# Doxygen configuration for qb-linq (configured by CMake: @CMAKE_PROJECT_NAME@)
+# HTML theme: Doxygen Awesome (doc/doxygen/theme/) + doc/doxygen/custom.css
+
+PROJECT_NAME           = @PROJECT_NAME@
+PROJECT_NUMBER         = @PROJECT_VERSION@
+PROJECT_BRIEF          = "Header-only lazy LINQ-style queries (qb framework, C++17)"
+PROJECT_LOGO           = @CMAKE_SOURCE_DIR@/doc/doxygen/logo.svg
+
+OUTPUT_DIRECTORY       = @CMAKE_CURRENT_BINARY_DIR@/doc_doxygen
+CREATE_SUBDIRS         = NO
+
+# API headers + repository README as the landing page
+INPUT                  = @CMAKE_SOURCE_DIR@/include \
+                         @CMAKE_SOURCE_DIR@/README.md
+USE_MDFILE_AS_MAINPAGE = @CMAKE_SOURCE_DIR@/README.md
+IMAGE_PATH             = @CMAKE_SOURCE_DIR@
+
+FILE_PATTERNS          = *.h *.md
+RECURSIVE              = YES
+EXCLUDE_SYMBOLS        =
+
+EXTENSION_MAPPING      = h=C++
+
+# Match GitHub-style heading anchors so README.md internal links like (#quick-start-cmake) resolve.
+MARKDOWN_ID_STYLE      = GITHUB
+
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_PACKAGE        = NO
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_CLASSES  = YES
+
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_NO_PARAMDOC       = YES
+
+# -----------------------------------------------------------------------------
+# HTML — Doxygen Awesome + extensions (see doc/doxygen/theme/README.md)
+# Requires Doxygen >= 1.9.5 (HTML_COLORSTYLE); extensions need 1.10+ / 1.14+ as noted below.
+# -----------------------------------------------------------------------------
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+FULL_SIDEBAR           = NO
+HTML_COLORSTYLE        = LIGHT
+HTML_DYNAMIC_SECTIONS  = YES
+HTML_HEADER            = @CMAKE_SOURCE_DIR@/doc/doxygen/header.html
+
+# Interactive TOC extension (doxygen-awesome-interactive-toc.js) — Doxygen >= 1.14
+PAGE_OUTLINE_PANEL     = NO
+
+# Fragment copy-button extension replaces built-in clipboard icon (Doxygen >= 1.10)
+HTML_COPY_CLIPBOARD    = NO
+
+HTML_EXTRA_STYLESHEET  = @CMAKE_SOURCE_DIR@/doc/doxygen/theme/doxygen-awesome.css \
+                         @CMAKE_SOURCE_DIR@/doc/doxygen/theme/doxygen-awesome-sidebar-only.css \
+                         @CMAKE_SOURCE_DIR@/doc/doxygen/custom.css \
+                         @CMAKE_SOURCE_DIR@/doc/doxygen/theme/doxygen-awesome-sidebar-only-darkmode-toggle.css
+
+HTML_EXTRA_FILES       = @CMAKE_SOURCE_DIR@/doc/doxygen/theme/doxygen-awesome-darkmode-toggle.js \
+                         @CMAKE_SOURCE_DIR@/doc/doxygen/theme/doxygen-awesome-fragment-copy-button.js \
+                         @CMAKE_SOURCE_DIR@/doc/doxygen/theme/doxygen-awesome-paragraph-link.js \
+                         @CMAKE_SOURCE_DIR@/doc/doxygen/theme/doxygen-awesome-interactive-toc.js
+
+GENERATE_LATEX         = NO
+GENERATE_XML           = NO
+
+OPTIMIZE_OUTPUT_FOR_C  = NO
+INLINE_INHERITED_MEMB  = NO
+FULL_PATH_NAMES        = YES
+STRIP_FROM_PATH        = @CMAKE_SOURCE_DIR@/include
+
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = NO
+PREDEFINED             = __cplusplus=201703L
+
+ENABLE_PREPROCESSING   = YES
+SKIP_FUNCTION_MACROS   = NO
+
+ALIASES                += "complexity=\par Computational complexity:\n"
+
+# Log warnings for CI / deep review (path is inside the configured build tree).
+WARN_LOGFILE           = @CMAKE_CURRENT_BINARY_DIR@/doxygen-qb-linq.warnings.log

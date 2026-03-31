@@ -1,0 +1,77 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 22,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}"
+    },
+    {
+      "name": "release",
+      "displayName": "Release — library only",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "QB_BUILD_TESTS": "OFF",
+        "QB_BUILD_BENCHMARKS": "OFF",
+        "QB_LINQ_BUILD_DOCS": "OFF"
+      }
+    },
+    {
+      "name": "dev",
+      "displayName": "Dev — GTest + Google Benchmark",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "QB_BUILD_TESTS": "ON",
+        "QB_BUILD_BENCHMARKS": "ON",
+        "QB_LINQ_BUILD_DOCS": "OFF"
+      }
+    },
+    {
+      "name": "ci",
+      "displayName": "CI — tests + benchmarks (Release)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "QB_BUILD_TESTS": "ON",
+        "QB_BUILD_BENCHMARKS": "ON",
+        "QB_LINQ_BUILD_DOCS": "OFF"
+      }
+    },
+    {
+      "name": "docs",
+      "displayName": "Doxygen HTML (requires doxygen on PATH)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "QB_BUILD_TESTS": "OFF",
+        "QB_BUILD_BENCHMARKS": "OFF",
+        "QB_LINQ_BUILD_DOCS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "release", "configurePreset": "release" },
+    { "name": "dev", "configurePreset": "dev" },
+    { "name": "ci", "configurePreset": "ci" },
+    { "name": "docs", "configurePreset": "docs" }
+  ],
+  "testPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "ci",
+      "configurePreset": "ci",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}
