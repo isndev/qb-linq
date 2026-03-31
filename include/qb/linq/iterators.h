@@ -141,12 +141,14 @@ public:
         : BaseIt(std::move(base)), fn_(std::move(fn))
     {}
 
-    /** @brief Copy-assign base position and projection from `rhs`. */
+    /**
+     * @brief Copy-assign underlying position from `rhs` (does not assign `fn_`; MSVC `find_if` assigns iterators,
+     *        and lambdas with reference captures are not copy-assignable — valid only within the same pipeline).
+     */
     select_iterator& operator=(select_iterator const& rhs) noexcept(
         noexcept(std::declval<BaseIt&>() = static_cast<BaseIt const&>(rhs)))
     {
         static_cast<BaseIt&>(*this) = static_cast<BaseIt const&>(rhs);
-        fn_ = rhs.fn_;
         return *this;
     }
     /** @} */
@@ -240,14 +242,15 @@ public:
         , pred_(std::move(pred))
     {}
 
-    /** @brief Copy-assign base position and range bounds. */
+    /**
+     * @brief Copy-assign positions and range bounds from `rhs` (does not assign `pred_`; see `select_iterator::operator=`).
+     */
     where_iterator& operator=(where_iterator const& rhs) noexcept(
-        noexcept(std::declval<BaseIt&>() = static_cast<BaseIt const&>(rhs)))
+        noexcept(std::declval<BaseIt&>() = std::declval<BaseIt const&>()))
     {
         static_cast<BaseIt&>(*this) = static_cast<BaseIt const&>(rhs);
         begin_ = rhs.begin_;
         end_ = rhs.end_;
-        pred_ = rhs.pred_;
         return *this;
     }
     /** @} */

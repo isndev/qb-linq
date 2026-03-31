@@ -465,11 +465,11 @@ materialized_range<typename Owner::iterator, Owner> wrap_materialized(std::share
 /** @brief Out-of-line `group_by`: populate nested map, return iterators over buckets. */
 template <class Derived, class Iter>
 template <class... Keys>
-materialized_range<typename group_by_map_t<typename query_range_algorithms<Derived, Iter>::reference, Keys...>::iterator,
-    group_by_map_t<typename query_range_algorithms<Derived, Iter>::reference, Keys...>>
+materialized_range<typename group_by_map_t<typename std::iterator_traits<Iter>::reference, Keys...>::iterator,
+    group_by_map_t<typename std::iterator_traits<Iter>::reference, Keys...>>
 query_range_algorithms<Derived, Iter>::group_by(Keys&&... keys) const
 {
-    using ref = typename query_range_algorithms<Derived, Iter>::reference;
+    using ref = typename std::iterator_traits<Iter>::reference;
     using map_t = group_by_map_t<ref, Keys...>;
     using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
     auto owner = std::make_shared<map_t>();
