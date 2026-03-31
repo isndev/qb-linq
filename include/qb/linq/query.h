@@ -379,10 +379,27 @@ public:
     /** @name Construction (materialized_range) */
     /** @{ */
     /**
+     * @brief Full `[begin(), end())` over `*own`; transfers ownership (preferred when the range is the whole container).
+     * @details Base-class iterators are taken from `own` before the `shared_ptr` member is move-assigned, so this
+     *          path is safe on all compilers. Use this (or `detail::wrap_materialized`) instead of calling the
+     *          three-argument constructor with `owner->begin()`, `owner->end()`, and `std::move(owner)` in one
+     *          expression — that pattern is undefined behavior because parameter initialization order is
+     *          unspecified (GCC/Linux vs Clang/macOS).
+     */
+    template <class O = Owner, class = std::enable_if_t<std::is_same_v<Iter, typename O::iterator>>>
+    explicit materialized_range(std::shared_ptr<O> own)
+        : query_state<Iter>(own->begin(), own->end()), owner_(std::move(own))
+    {}
+
+    /**
      * @brief Iterator range over data owned by `own` (shared lifetime).
      * @param b Iterator to first element in `*own` (or map begin).
      * @param e Iterator past the exposed range.
      * @param own Shared ownership; must outlive any iterator derived from this range.
+     * @warning Do not pass `std::move(owner)` together with `owner->begin()` / `owner->end()` as sibling arguments
+     *          from the same local `owner` — use `materialized_range(std::move(owner))` or `wrap_materialized`
+     *          instead. Safe uses: iterators and `own` come from separate prior statements (`desc()`), or `own` is
+     *          an lvalue (e.g. a data member) so the third parameter is a copy.
      */
     materialized_range(Iter b, Iter e, std::shared_ptr<Owner> own)
         : query_state<Iter>(std::move(b), std::move(e)), owner_(std::move(own))
@@ -433,6 +450,18 @@ private:
  */
 namespace detail {
 
+/**
+ * @brief Builds a `materialized_range` over the full contents of a filled `shared_ptr` owner.
+ * @details Delegates to the single-argument `materialized_range` constructor (safe base/member init order).
+ *          Never replace this with `materialized_range(owner->begin(), owner->end(), std::move(owner))` in a single
+ *          call — that is undefined behavior when the three arguments involve the same moved-from `owner`.
+ */
+template <class Owner>
+materialized_range<typename Owner::iterator, Owner> wrap_materialized(std::shared_ptr<Owner> owner)
+{
+    return materialized_range<typename Owner::iterator, Owner>(std::move(owner));
+}
+
 /** @brief Out-of-line `group_by`: populate nested map, return iterators over buckets. */
 template <class Derived, class Iter>
 template <class... Keys>
@@ -446,7 +475,7 @@ query_range_algorithms<Derived, Iter>::group_by(Keys&&... keys) const
     auto owner = std::make_shared<map_t>();
     for (iterator_t it = derived().begin(); it != derived().end(); ++it)
         group_by_impl<ref, std::decay_t<Keys>...>::emplace(*owner, *it, keys...);
-    return materialized_range<typename map_t::iterator, map_t>(owner->begin(), owner->end(), std::move(owner));
+    return wrap_materialized(std::move(owner));
 }
 
 /** @brief Out-of-line `order_by`: copy to vector, `std::sort` with lexicographic key extractors. */
@@ -464,8 +493,7 @@ query_range_algorithms<Derived, Iter>::order_by(KeyFilters&&... key_filters) con
     std::sort(owner->begin(), owner->end(), [&](ref_t a, ref_t b) {
         return lexicographic_compare(a, b, key_filters...);
     });
-    return materialized_range<typename std::vector<val_t>::iterator, std::vector<val_t>>(
-        owner->begin(), owner->end(), std::move(owner));
+    return wrap_materialized(std::move(owner));
 }
 
 /** @brief Out-of-line `to_vector`: copy sequence into `std::vector` owned by `materialized_range`. */
@@ -478,8 +506,7 @@ query_range_algorithms<Derived, Iter>::to_vector() const
     auto owner = std::make_shared<std::vector<val_t>>();
     reserve_if_random_access(*owner, derived().begin(), derived().end());
     std::copy(derived().begin(), derived().end(), std::back_inserter(*owner));
-    return materialized_range<typename std::vector<val_t>::iterator, std::vector<val_t>>(
-        owner->begin(), owner->end(), std::move(owner));
+    return wrap_materialized(std::move(owner));
 }
 
 /** @brief Out-of-line `to_unordered_map`: hash map; last write wins on duplicate keys. */
@@ -496,8 +523,7 @@ auto query_range_algorithms<Derived, Iter>::to_unordered_map(KeyFn&& keyf, ElemF
     reserve_if_random_access(*owner, derived().begin(), derived().end());
     for (iterator_t it = derived().begin(); it != derived().end(); ++it)
         (*owner)[keyf(*it)] = elemf(*it);
-    return materialized_range<typename map_t::iterator, map_t>(
-        owner->begin(), owner->end(), std::move(owner));
+    return wrap_materialized(std::move(owner));
 }
 
 /** @brief Out-of-line `to_map`: ordered `std::map`; last write wins on duplicate keys. */
@@ -513,8 +539,7 @@ auto query_range_algorithms<Derived, Iter>::to_map(KeyFn&& keyf, ElemFn&& elemf)
     auto owner = std::make_shared<map_t>();
     for (iterator_t it = derived().begin(); it != derived().end(); ++it)
         (*owner)[keyf(*it)] = elemf(*it);
-    return materialized_range<typename map_t::iterator, map_t>(
-        owner->begin(), owner->end(), std::move(owner));
+    return wrap_materialized(std::move(owner));
 }
 
 /** @brief Out-of-line `to_dictionary`: `unordered_map` with duplicate-key detection (`invalid_argument`). */
@@ -534,8 +559,7 @@ auto query_range_algorithms<Derived, Iter>::to_dictionary(KeyFn&& keyf, ElemFn&&
         if (!owner->emplace(k, elemf(*it)).second)
             throw std::invalid_argument("qb::linq::to_dictionary: duplicate key");
     }
-    return materialized_range<typename map_t::iterator, map_t>(
-        owner->begin(), owner->end(), std::move(owner));
+    return wrap_materialized(std::move(owner));
 }
 
 /** @brief Out-of-line `except`: filter out values present in `rhs` (unordered set of `value_type`). */
@@ -557,8 +581,7 @@ query_range_algorithms<Derived, Iter>::except(Rng const& rhs) const
         if (ban.find(*it) == ban.end())
             owner->push_back(*it);
     }
-    return materialized_range<typename std::vector<val_t>::iterator, std::vector<val_t>>(
-        owner->begin(), owner->end(), std::move(owner));
+    return wrap_materialized(std::move(owner));
 }
 
 /** @brief Out-of-line `intersect`: keep elements also in `rhs` (order follows this sequence). */
@@ -580,8 +603,7 @@ query_range_algorithms<Derived, Iter>::intersect(Rng const& rhs) const
         if (want.find(*it) != want.end())
             owner->push_back(*it);
     }
-    return materialized_range<typename std::vector<val_t>::iterator, std::vector<val_t>>(
-        owner->begin(), owner->end(), std::move(owner));
+    return wrap_materialized(std::move(owner));
 }
 
 /** @brief Out-of-line `take_last`: tail `n` elements (random-access → copy only `min(n,len)` items). */
@@ -594,8 +616,7 @@ query_range_algorithms<Derived, Iter>::take_last(std::size_t n) const
     using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
     if (n == 0) {
         auto owner = std::make_shared<std::vector<val_t>>();
-        return materialized_range<typename std::vector<val_t>::iterator, std::vector<val_t>>(
-            owner->begin(), owner->end(), std::move(owner));
+        return wrap_materialized(std::move(owner));
     }
     iterator_t b = derived().begin();
     iterator_t e = derived().end();
@@ -604,8 +625,7 @@ query_range_algorithms<Derived, Iter>::take_last(std::size_t n) const
         auto const dist = e - b;
         auto owner = std::make_shared<std::vector<val_t>>();
         if (dist <= 0)
-            return materialized_range<typename std::vector<val_t>::iterator, std::vector<val_t>>(
-                owner->begin(), owner->end(), std::move(owner));
+            return wrap_materialized(std::move(owner));
         std::size_t const len = static_cast<std::size_t>(dist);
         std::size_t const take = (std::min)(n, len);
         using diff_t = typename std::iterator_traits<iterator_t>::difference_type;
@@ -613,8 +633,7 @@ query_range_algorithms<Derived, Iter>::take_last(std::size_t n) const
         owner->reserve(take);
         for (iterator_t it = start; it != e; ++it)
             owner->push_back(*it);
-        return materialized_range<typename std::vector<val_t>::iterator, std::vector<val_t>>(
-            owner->begin(), owner->end(), std::move(owner));
+        return wrap_materialized(std::move(owner));
     } else {
         std::deque<val_t> ring;
         for (iterator_t it = b; it != e; ++it) {
@@ -626,8 +645,7 @@ query_range_algorithms<Derived, Iter>::take_last(std::size_t n) const
             }
         }
         auto owner = std::make_shared<std::vector<val_t>>(ring.begin(), ring.end());
-        return materialized_range<typename std::vector<val_t>::iterator, std::vector<val_t>>(
-            owner->begin(), owner->end(), std::move(owner));
+        return wrap_materialized(std::move(owner));
     }
 }
 
@@ -646,20 +664,17 @@ query_range_algorithms<Derived, Iter>::skip_last(std::size_t n) const
         auto owner = std::make_shared<std::vector<val_t>>();
         auto const dist = e - b;
         if (dist <= 0)
-            return materialized_range<typename std::vector<val_t>::iterator, std::vector<val_t>>(
-                owner->begin(), owner->end(), std::move(owner));
+            return wrap_materialized(std::move(owner));
         std::size_t const len = static_cast<std::size_t>(dist);
         if (len <= n)
-            return materialized_range<typename std::vector<val_t>::iterator, std::vector<val_t>>(
-                owner->begin(), owner->end(), std::move(owner));
+            return wrap_materialized(std::move(owner));
         std::size_t const keep = len - n;
         using diff_t = typename std::iterator_traits<iterator_t>::difference_type;
         iterator_t const end_keep = ::qb::linq::detail::ra_plus(b, static_cast<diff_t>(keep));
         owner->reserve(keep);
         for (iterator_t it = b; it != end_keep; ++it)
             owner->push_back(*it);
-        return materialized_range<typename std::vector<val_t>::iterator, std::vector<val_t>>(
-            owner->begin(), owner->end(), std::move(owner));
+        return wrap_materialized(std::move(owner));
     } else {
         auto owner = std::make_shared<std::vector<val_t>>();
         reserve_if_random_access(*owner, b, e);
@@ -669,8 +684,7 @@ query_range_algorithms<Derived, Iter>::skip_last(std::size_t n) const
             owner->erase(owner->end() - static_cast<typename std::vector<val_t>::difference_type>(n), owner->end());
         else
             owner->clear();
-        return materialized_range<typename std::vector<val_t>::iterator, std::vector<val_t>>(
-            owner->begin(), owner->end(), std::move(owner));
+        return wrap_materialized(std::move(owner));
     }
 }
 
@@ -701,8 +715,7 @@ auto query_range_algorithms<Derived, Iter>::join(Rng const& inner, OuterKey&& ou
         for (auto in = r.first; in != r.second; ++in)
             owner->push_back(result(*it, in->second));
     }
-    return materialized_range<typename std::vector<Row>::iterator, std::vector<Row>>(
-        owner->begin(), owner->end(), std::move(owner));
+    return wrap_materialized(std::move(owner));
 }
 
 /** @brief Out-of-line `group_join`: outer row paired with vector of matching inner elements. */
@@ -736,8 +749,7 @@ auto query_range_algorithms<Derived, Iter>::group_join(
             inners.push_back(in->second);
         owner->emplace_back(static_cast<val_t>(*it), std::move(inners));
     }
-    return materialized_range<typename std::vector<Row>::iterator, std::vector<Row>>(
-        owner->begin(), owner->end(), std::move(owner));
+    return wrap_materialized(std::move(owner));
 }
 
 /** @brief Out-of-line `to_unordered_set`: unique elements in unspecified order. */
@@ -751,8 +763,7 @@ auto query_range_algorithms<Derived, Iter>::to_unordered_set() const
     reserve_if_random_access(*owner, derived().begin(), derived().end());
     for (iterator_t it = derived().begin(); it != derived().end(); ++it)
         owner->insert(*it);
-    return materialized_range<typename set_t::iterator, set_t>(
-        owner->begin(), owner->end(), std::move(owner));
+    return wrap_materialized(std::move(owner));
 }
 
 /** @brief Out-of-line `to_set`: unique elements in `operator<` order. */
@@ -765,7 +776,7 @@ auto query_range_algorithms<Derived, Iter>::to_set() const
     auto owner = std::make_shared<set_t>();
     for (iterator_t it = derived().begin(); it != derived().end(); ++it)
         owner->insert(*it);
-    return materialized_range<typename set_t::iterator, set_t>(owner->begin(), owner->end(), std::move(owner));
+    return wrap_materialized(std::move(owner));
 }
 
 } // namespace detail
