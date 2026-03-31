@@ -29,9 +29,9 @@ endif()
 
 option(QB_BUILD_TESTS "Build GoogleTest suite (ctest)" ${_qb_default_build_tests})
 option(QB_BUILD_BENCHMARKS "Build Google Benchmark executable qb_linq_benchmark" OFF)
-# ON: configures doc/Doxyfile.in and adds target qb_linq_docs (HTML under ${CMAKE_BINARY_DIR}/doc_doxygen/html).
+# ON: configures docs/Doxyfile.in and adds target qb_linq_docs (HTML under ${CMAKE_BINARY_DIR}/doc_doxygen/html).
 # HTML: Doxygen Awesome + extensions (dark mode, copy-on-hover, heading links, interactive TOC);
-# custom header doc/doxygen/header.html; README.md is the main page.
+# custom header docs/doxygen/header.html; README.md is the main page.
 # Configure preset "docs" in CMakePresets.json or pass -DQB_LINQ_BUILD_DOCS=ON. Requires doxygen on PATH.
 option(QB_LINQ_BUILD_DOCS "Build API reference with Doxygen (HTML)" OFF)
 
@@ -67,7 +67,7 @@ endif()
 if(QB_LINQ_BUILD_DOCS)
     find_package(Doxygen QUIET)
     if(DOXYGEN_FOUND)
-        set(QB_LINQ_DOXYFILE_IN "${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.in")
+        set(QB_LINQ_DOXYFILE_IN "${CMAKE_CURRENT_SOURCE_DIR}/docs/Doxyfile.in")
         set(QB_LINQ_DOXYFILE_OUT "${CMAKE_CURRENT_BINARY_DIR}/Doxyfile.qb-linq")
         # QB_LINQ_GENERATED_INCLUDE_DIR is set at top level (version.h for Doxygen INPUT)
         configure_file("${QB_LINQ_DOXYFILE_IN}" "${QB_LINQ_DOXYFILE_OUT}" @ONLY)
@@ -116,3 +116,4 @@ install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/qb-linq-config-version.cmake"
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/qb-linq"
 )
+
