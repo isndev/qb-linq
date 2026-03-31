@@ -3,3 +3,6 @@
 
 # Amalgamation script: LF helps WSL/python on /mnt/d/
 scripts/amalgamate_single_header.py text eol=lf
+
+# Generated amalgam: LF for consistent diffs / WSL
+single_header/linq.h text eol=lf
