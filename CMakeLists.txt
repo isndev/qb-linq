@@ -71,9 +71,9 @@ elseif(WIN32)
     )
 else()
     add_custom_target(qb_linq_single_header
-        COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/scripts/amalgamate_single_header.sh"
+        COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/scripts/amalgamate_single_header.sh"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-        COMMENT "Regenerate single_header/linq.h (python3)"
+        COMMENT "Regenerate single_header/linq.h (sh + python3)"
         VERBATIM
     )
 endif()
