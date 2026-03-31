@@ -15,11 +15,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - **`single_header/linq.h`** — amalgamated drop-in header (same API as **`<qb/linq.h>`**); scripts **`scripts/amalgamate_single_header.{py,ps1,sh}`**, CMake target **`qb_linq_single_header`**, smoke test **`qb_linq_single_header_test`**.
-- **`.gitattributes`** — **`*.sh`** and amalgamation **`.py`** use **`eol=lf`** for Linux/WSL shebangs.
+- **`.gitattributes`** — **`*.sh`**, amalgamation **`.py`**, and **`single_header/linq.h`** use **`eol=lf`**.
 
 ### Fixed
 
-- **`qb_linq_single_header`** on Unix invokes **`amalgamate_single_header.py`** via **`python3`/`python`** instead of **`sh`**, avoiding CRLF-broken **`*.sh`** on WSL **`/mnt/d/`** (DrvFs).
+- **`qb_linq_single_header`** on Unix runs **`amalgamate_single_header.py`** via **`python3`/`python`** instead of invoking the **`.sh`** wrapper through **`sh`**.
 
 ## [1.1.0] - 2026-04-01
 

@@ -81,6 +81,14 @@ Behaviour changes should keep **`QB_BUILD_TESTS=ON`** green; changes near hot pa
 
 | Custom target | Effect |
 |---------------|--------|
-| **`qb_linq_single_header`** | Rewrites **`single_header/linq.h`** from **`include/qb/linq/*.h`** + embedded **`version.h`**. Invokes **`python3`**/`python` on Unix and when **FindPython3** succeeds; on Windows without Python it uses **PowerShell**. You can always run **`python3 scripts/amalgamate_single_header.py`** from the repo root (avoids **`*.sh`** CRLF issues on WSL **`/mnt/d/`**). |
+| **`qb_linq_single_header`** | Rewrites **`single_header/linq.h`** from **`include/qb/linq/*.h`** + embedded **`version.h`**. CMake prefers **Python 3** on Unix (or when **FindPython3** finds it); on Windows without Python it uses **PowerShell**. |
 
-After changing library headers or **`project(VERSION …)`**, rebuild that target and commit **`single_header/linq.h`**. CI runs **`qb_linq_single_header_test`** (include path **`single_header/`** only).
+From the **repository root**, you can regenerate manually with any of these (same result):
+
+| Script | Typical use |
+|--------|-------------|
+| **`scripts/amalgamate_single_header.py`** | **`python3 …`** or **`python …`** — any OS with Python 3. |
+| **`scripts/amalgamate_single_header.sh`** | **`sh …`** — POSIX; runs **`python3`**. |
+| **`scripts/amalgamate_single_header.ps1`** | **`pwsh -File …`** — PowerShell (often Windows). |
+
+After changing library headers or **`project(VERSION …)`**, rebuild **`qb_linq_single_header`** (or run a script) and commit **`single_header/linq.h`**. CI runs **`qb_linq_single_header_test`** (include path **`single_header/`** only).

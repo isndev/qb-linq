@@ -53,7 +53,7 @@ set_target_properties(qb-linq PROPERTIES
 )
 
 # Regenerate single_header/linq.h after editing headers under include/qb/linq/ (or bumping project VERSION).
-# Unix/macOS: always invoke python3 directly (avoids CRLF issues with .sh on /mnt/d/ etc.).
+# Unix/macOS: invoke amalgamation via Python (FindPython3 or python3 on PATH).
 find_package(Python3 COMPONENTS Interpreter QUIET)
 set(_qb_amalg_py "")
 if(Python3_FOUND)
