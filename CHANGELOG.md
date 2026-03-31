@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **`AGENTS.md`** no longer hardcodes a library version number (use **`CMakeLists.txt`** / **`docs/VERSIONING.md`**).
 - **`.gitignore`** documents **`doc_doxygen/`** and related outputs; keeps legacy **`doc/`** ignores.
+- **Doxygen / CI docs job:** `header.html` no longer uses **`PROJECT_ICON`** / **`COPY_CLIPBOARD`** blocks (unsupported on older Doxygen). **`Doxyfile.in`** lists linked repo Markdown in **`INPUT`**, **`HAVE_DOT = NO`** avoids missing **`dot`**, README tagline is plain bold (heading nesting warning).
 
 ## [1.0.0] - 2026-03-31
 

@@ -2,7 +2,7 @@
 
 # qb-linq
 
-### *Lazy LINQ-style pipelines for C++17 — header-only, zero dependencies beyond the STL*
+**Lazy LINQ-style pipelines for C++17 — header-only, zero dependencies beyond the STL**
 
 [![CMake](https://github.com/isndev/qb-linq/actions/workflows/cmake.yml/badge.svg?branch=main)](https://github.com/isndev/qb-linq/actions/workflows/cmake.yml)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=c%2B%2B&logoColor=white)](https://en.cppreference.com/w/cpp/17)

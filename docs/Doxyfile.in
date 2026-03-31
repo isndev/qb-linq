@@ -9,10 +9,19 @@ PROJECT_LOGO           = @CMAKE_SOURCE_DIR@/docs/doxygen/logo.svg
 OUTPUT_DIRECTORY       = @CMAKE_CURRENT_BINARY_DIR@/doc_doxygen
 CREATE_SUBDIRS         = NO
 
-# API headers + repository README as the landing page
+# API headers + README (main page) + Markdown files linked from README (cross-page links)
 INPUT                  = @CMAKE_SOURCE_DIR@/include \
                          @QB_LINQ_GENERATED_INCLUDE_DIR@ \
-                         @CMAKE_SOURCE_DIR@/README.md
+                         @CMAKE_SOURCE_DIR@/README.md \
+                         @CMAKE_SOURCE_DIR@/AGENTS.md \
+                         @CMAKE_SOURCE_DIR@/CHANGELOG.md \
+                         @CMAKE_SOURCE_DIR@/CODE_OF_CONDUCT.md \
+                         @CMAKE_SOURCE_DIR@/CONTRIBUTING.md \
+                         @CMAKE_SOURCE_DIR@/SECURITY.md \
+                         @CMAKE_SOURCE_DIR@/docs/README.md \
+                         @CMAKE_SOURCE_DIR@/docs/BUILDING.md \
+                         @CMAKE_SOURCE_DIR@/docs/VERSIONING.md \
+                         @CMAKE_SOURCE_DIR@/docs/LLM_CONTEXT.md
 USE_MDFILE_AS_MAINPAGE = @CMAKE_SOURCE_DIR@/README.md
 IMAGE_PATH             = @CMAKE_SOURCE_DIR@
 
@@ -66,6 +75,9 @@ HTML_EXTRA_FILES       = @CMAKE_SOURCE_DIR@/docs/doxygen/theme/doxygen-awesome-d
 
 GENERATE_LATEX         = NO
 GENERATE_XML           = NO
+
+# CI runners often lack Graphviz; class/collaboration PNGs are optional for this API reference.
+HAVE_DOT               = NO
 
 OPTIMIZE_OUTPUT_FOR_C  = NO
 INLINE_INHERITED_MEMB  = NO
