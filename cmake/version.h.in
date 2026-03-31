@@ -15,7 +15,7 @@
 /** @brief Patch version. */
 #define QB_LINQ_VERSION_PATCH @PROJECT_VERSION_PATCH@
 
-/** @brief Version string, e.g. `"1.0.0"`. */
+/** @brief Version string, e.g. `"1.1.0"`. */
 #define QB_LINQ_VERSION_STRING "@PROJECT_VERSION@"
 
 /**
