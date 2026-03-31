@@ -494,3 +494,41 @@ private:
 };
 
 } // namespace qb::linq
+
+/**
+ * @brief Ensure `std::iterator_traits` reports the clamped category for adaptors that inherit a random-access
+ *        base (`operator-` still exists on the base subobject; libstdc++/MSVC must not treat them as random-access).
+ */
+namespace std {
+
+template <class BaseIt, class Pred>
+struct iterator_traits<::qb::linq::where_iterator<BaseIt, Pred>> {
+    using iterator_category =
+        ::qb::linq::detail::clamp_iterator_category_t<typename iterator_traits<BaseIt>::iterator_category>;
+    using value_type = typename ::qb::linq::where_iterator<BaseIt, Pred>::value_type;
+    using difference_type = typename ::qb::linq::where_iterator<BaseIt, Pred>::difference_type;
+    using pointer = typename ::qb::linq::where_iterator<BaseIt, Pred>::pointer;
+    using reference = typename ::qb::linq::where_iterator<BaseIt, Pred>::reference;
+};
+
+template <class BaseIt, class Pred>
+struct iterator_traits<::qb::linq::take_while_iterator<BaseIt, Pred>> {
+    using iterator_category =
+        ::qb::linq::detail::clamp_iterator_category_t<typename iterator_traits<BaseIt>::iterator_category>;
+    using value_type = typename ::qb::linq::take_while_iterator<BaseIt, Pred>::value_type;
+    using difference_type = typename ::qb::linq::take_while_iterator<BaseIt, Pred>::difference_type;
+    using pointer = typename ::qb::linq::take_while_iterator<BaseIt, Pred>::pointer;
+    using reference = typename ::qb::linq::take_while_iterator<BaseIt, Pred>::reference;
+};
+
+template <class BaseIt>
+struct iterator_traits<::qb::linq::take_n_iterator<BaseIt>> {
+    using iterator_category =
+        ::qb::linq::detail::clamp_iterator_category_t<typename iterator_traits<BaseIt>::iterator_category>;
+    using value_type = typename ::qb::linq::take_n_iterator<BaseIt>::value_type;
+    using difference_type = typename ::qb::linq::take_n_iterator<BaseIt>::difference_type;
+    using pointer = typename ::qb::linq::take_n_iterator<BaseIt>::pointer;
+    using reference = typename ::qb::linq::take_n_iterator<BaseIt>::reference;
+};
+
+} // namespace std

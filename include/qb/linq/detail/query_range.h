@@ -82,6 +82,18 @@ class materialized_range; ///< Shared-owned materialized data (`query.h`).
  */
 namespace detail {
 
+/**
+ * @brief `b + d` as `Iter` (wraps when `Iter` inherits `BaseIt` and `operator+` returns `BaseIt`, e.g. `basic_iterator`).
+ */
+template <class Iter>
+[[nodiscard]] inline Iter ra_plus(Iter b, typename std::iterator_traits<Iter>::difference_type d)
+{
+    auto adv = b + d;
+    if constexpr (std::is_same_v<std::decay_t<decltype(adv)>, Iter>)
+        return adv;
+    return Iter(std::move(adv));
+}
+
 template <class It1, class It2>
 class concat_view; ///< Concatenation of two forward sequences (`extra_views.h`).
 template <class It1, class It2>
@@ -265,7 +277,7 @@ public:
             auto const dist = e - b;
             if (dist < 0 || static_cast<std::size_t>(dist) <= index)
                 throw std::out_of_range("qb::linq::element_at");
-            return *(b + static_cast<typename std::iterator_traits<iterator>::difference_type>(index));
+            return *detail::ra_plus(b, static_cast<typename std::iterator_traits<iterator>::difference_type>(index));
         } else {
             iterator it = b;
             for (; index > 0 && it != e; --index, ++it) {}
@@ -285,7 +297,7 @@ public:
             auto const dist = e - b;
             if (dist < 0 || static_cast<std::size_t>(dist) <= index)
                 return value_type{};
-            return *(b + static_cast<typename std::iterator_traits<iterator>::difference_type>(index));
+            return *detail::ra_plus(b, static_cast<typename std::iterator_traits<iterator>::difference_type>(index));
         } else {
             iterator it = b;
             for (; index > 0 && it != e; --index, ++it) {}

@@ -66,18 +66,6 @@ template <class Owner, class K>
 struct has_at<Owner, K, std::void_t<decltype(std::declval<Owner&>().at(std::declval<K const&>()))>>
     : std::true_type {};
 
-/**
- * @brief `b + d` as `Iter` (wraps when `Iter` inherits `BaseIt` and `operator+` returns `BaseIt`, e.g. `basic_iterator`).
- */
-template <class Iter>
-[[nodiscard]] inline Iter ra_plus(Iter b, typename std::iterator_traits<Iter>::difference_type d)
-{
-    auto adv = b + d;
-    if constexpr (std::is_same_v<std::decay_t<decltype(adv)>, Iter>)
-        return adv;
-    return Iter(std::move(adv));
-}
-
 } // namespace detail
 
 // ---------------------------------------------------------------------------
@@ -621,7 +609,7 @@ query_range_algorithms<Derived, Iter>::take_last(std::size_t n) const
         std::size_t const len = static_cast<std::size_t>(dist);
         std::size_t const take = (std::min)(n, len);
         using diff_t = typename std::iterator_traits<iterator_t>::difference_type;
-        iterator_t const start = detail::ra_plus(b, static_cast<diff_t>(len - take));
+        iterator_t const start = ::qb::linq::detail::ra_plus(b, static_cast<diff_t>(len - take));
         owner->reserve(take);
         for (iterator_t it = start; it != e; ++it)
             owner->push_back(*it);
@@ -666,7 +654,7 @@ query_range_algorithms<Derived, Iter>::skip_last(std::size_t n) const
                 owner->begin(), owner->end(), std::move(owner));
         std::size_t const keep = len - n;
         using diff_t = typename std::iterator_traits<iterator_t>::difference_type;
-        iterator_t const end_keep = detail::ra_plus(b, static_cast<diff_t>(keep));
+        iterator_t const end_keep = ::qb::linq::detail::ra_plus(b, static_cast<diff_t>(keep));
         owner->reserve(keep);
         for (iterator_t it = b; it != end_keep; ++it)
             owner->push_back(*it);
