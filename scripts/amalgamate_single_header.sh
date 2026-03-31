@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/bin/sh
 # Regenerate single_header/linq.h (requires python3)
 set -e
 cd "$(dirname "$0")/.."
