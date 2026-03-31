@@ -8,11 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- **`single_header/linq.h`** — amalgamated drop-in header (same API as **`<qb/linq.h>`**); scripts **`scripts/amalgamate_single_header.{py,ps1,sh}`** and CMake target **`qb_linq_single_header`**; smoke test **`qb_linq_single_header_test`**.
+- _(nothing yet)_
+
+## [1.2.0] - 2026-04-02
+
+### Added
+
+- **`single_header/linq.h`** — amalgamated drop-in header (same API as **`<qb/linq.h>`**); scripts **`scripts/amalgamate_single_header.{py,ps1,sh}`**, CMake target **`qb_linq_single_header`**, smoke test **`qb_linq_single_header_test`**.
+- **`.gitattributes`** — **`*.sh`** and amalgamation **`.py`** use **`eol=lf`** for Linux/WSL shebangs.
 
 ### Fixed
 
-- **`qb_linq_single_header`** on Unix calls **`amalgamate_single_header.py`** directly (**`python3`**) instead of **`sh`**, avoiding CRLF-broken wrappers on WSL/DrvFs. **`amalgamate_single_header.sh`** rewritten with LF-only line endings; **`.gitattributes`** keeps **`*.sh`** as **`eol=lf`**.
+- **`qb_linq_single_header`** on Unix invokes **`amalgamate_single_header.py`** via **`python3`/`python`** instead of **`sh`**, avoiding CRLF-broken **`*.sh`** on WSL **`/mnt/d/`** (DrvFs).
 
 ## [1.1.0] - 2026-04-01
 
@@ -47,5 +54,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Doxygen HTML docs (**`qb_linq_docs`**, Doxygen Awesome under `docs/doxygen/`).
 - Guides under **`docs/`** (building, versioning, LLM context); **CONTRIBUTING**, **SECURITY**, **AGENTS**; GitHub issue/PR templates; documentation moved from **`doc/`** to **`docs/`**.
 
+[1.2.0]: https://github.com/isndev/qb-linq/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/isndev/qb-linq/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/isndev/qb-linq/releases/tag/v1.0.0

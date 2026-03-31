@@ -9,7 +9,7 @@ This document matches the **root [`CMakeLists.txt`](../CMakeLists.txt)**, **[`CM
 | Item | Value |
 |------|--------|
 | **CMake project** | `qb-linq` |
-| **Version** | `1.1.0` (`project(... VERSION 1.1.0)`) |
+| **Version** | `1.2.0` (`project(... VERSION 1.2.0)`) |
 | **Library type** | **INTERFACE** — no compiled `.lib` / `.a`; headers only |
 | **CMake target** | `qb::linq` (alias of `qb-linq`) |
 | **Include interface** | `include/` plus **`generated_include/`** (build tree) — holds **`qb/linq/version.h`** generated from **`project(VERSION)`** |
@@ -20,7 +20,7 @@ This document matches the **root [`CMakeLists.txt`](../CMakeLists.txt)**, **[`CM
 
 ## Consuming the library
 
-- **Installed package:** `find_package(qb-linq 1.1 CONFIG REQUIRED)` then `target_link_libraries(... PRIVATE qb::linq)` (see README).
+- **Installed package:** `find_package(qb-linq 1.2 CONFIG REQUIRED)` then `target_link_libraries(... PRIVATE qb::linq)` (see README).
 - **In-tree / vendor:** `add_subdirectory(qb-linq)` then `target_link_libraries(... PRIVATE qb::linq)`.
 - **Include in C++:** `#include <qb/linq.h>` only (per README).
 

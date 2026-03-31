@@ -4,7 +4,7 @@
  *
  * @note Do not edit by hand. Regenerate with:
  * `python scripts/amalgamate_single_header.py` or `pwsh -File scripts/amalgamate_single_header.ps1` or CMake target **qb_linq_single_header**.
- * @note Embedded version **1.1.0** from `CMakeLists.txt` `project(VERSION ...)`.
+ * @note Embedded version **1.2.0** from `CMakeLists.txt` `project(VERSION ...)`.
  */
 
 #pragma once
@@ -40,13 +40,13 @@
 #define QB_LINQ_VERSION_MAJOR 1
 
 /** @brief Minor version. */
-#define QB_LINQ_VERSION_MINOR 1
+#define QB_LINQ_VERSION_MINOR 2
 
 /** @brief Patch version. */
 #define QB_LINQ_VERSION_PATCH 0
 
-/** @brief Version string, e.g. `"1.1.0"`. */
-#define QB_LINQ_VERSION_STRING "1.1.0"
+/** @brief Version string, e.g. `"1.2.0"`. */
+#define QB_LINQ_VERSION_STRING "1.2.0"
 
 /**
  * @brief Integer for preprocessor comparison: `major*1'000'000 + minor*1'000 + patch` (minor/patch &lt; 1000).

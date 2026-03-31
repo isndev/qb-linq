@@ -48,7 +48,7 @@
 ### Installed package
 
 ```cmake
-find_package(qb-linq 1.1 CONFIG REQUIRED)
+find_package(qb-linq 1.2 CONFIG REQUIRED)
 target_link_libraries(your_target PRIVATE qb::linq)
 target_compile_features(your_target PRIVATE cxx_std_17)
 ```
