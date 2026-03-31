@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- _(nothing yet)_
+- **`single_header/linq.h`** — amalgamated drop-in header (same API as **`<qb/linq.h>`**); scripts **`scripts/amalgamate_single_header.{py,ps1,sh}`** and CMake target **`qb_linq_single_header`**; smoke test **`qb_linq_single_header_test`**.
 
 ## [1.1.0] - 2026-04-01
 

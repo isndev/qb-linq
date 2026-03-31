@@ -27,6 +27,7 @@ Thanks for your interest. This project is a **header-only C++17** library; all l
 | **Behaviour** | New or updated cases in **`tests/*.cpp`** (GoogleTest). |
 | **Docs only** | No tests required unless examples were wrong or misleading. |
 | **Public API** | Update **[`README.md`](README.md)** API tables / examples if needed; note **[`CHANGELOG.md`](CHANGELOG.md)** under **`[Unreleased]`**. |
+| **Headers under `include/qb/linq/`** | Regenerate **`single_header/linq.h`** (`cmake --build … --target qb_linq_single_header`) and commit it. |
 | **Version bump** | Usually done by maintainers: **`CMakeLists.txt`** `project(VERSION …)`, regenerate / verify **`version.h`**, update **CHANGELOG** release section. |
 
 ## Commits

@@ -52,3 +52,17 @@ include(GoogleTest)
 gtest_discover_tests(qb_linq_tests
     DISCOVERY_TIMEOUT 60
 )
+
+# single_header/linq.h — one TU, no qb::linq include path (must stay in sync via qb_linq_single_header)
+add_executable(qb_linq_single_header_test linq_single_header_test.cpp)
+target_include_directories(qb_linq_single_header_test PRIVATE "${CMAKE_SOURCE_DIR}/single_header")
+target_link_libraries(qb_linq_single_header_test PRIVATE GTest::gtest_main)
+target_compile_features(qb_linq_single_header_test PRIVATE cxx_std_17)
+if(MSVC)
+    target_compile_options(qb_linq_single_header_test PRIVATE /W4 /permissive- /bigobj)
+else()
+    target_compile_options(qb_linq_single_header_test PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+gtest_discover_tests(qb_linq_single_header_test
+    DISCOVERY_TIMEOUT 60
+)

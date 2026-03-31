@@ -52,6 +52,32 @@ set_target_properties(qb-linq PROPERTIES
     EXPORT_NAME linq
 )
 
+# Regenerate single_header/linq.h after editing headers under include/qb/linq/ (or bumping project VERSION).
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_FOUND)
+    add_custom_target(qb_linq_single_header
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/amalgamate_single_header.py"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        COMMENT "Regenerate single_header/linq.h"
+        VERBATIM
+    )
+elseif(WIN32)
+    add_custom_target(qb_linq_single_header
+        COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
+                "${CMAKE_CURRENT_SOURCE_DIR}/scripts/amalgamate_single_header.ps1"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        COMMENT "Regenerate single_header/linq.h (PowerShell)"
+        VERBATIM
+    )
+else()
+    add_custom_target(qb_linq_single_header
+        COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/scripts/amalgamate_single_header.sh"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        COMMENT "Regenerate single_header/linq.h (python3)"
+        VERBATIM
+    )
+endif()
+
 # -----------------------------------------------------------------------------
 # Optional: tests, benchmarks, documentation
 # -----------------------------------------------------------------------------

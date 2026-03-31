@@ -8,7 +8,7 @@
 |-----|---------|
 | **[`README.md` (docs/)](README.md)** | Index of all guides in this folder |
 | **[`AGENTS.md`](../AGENTS.md)** | Agent checklist, file map, verification |
-| **[`BUILDING.md`](BUILDING.md)** | CMake options, presets, `qb_linq_tests` / `qb_linq_benchmark` / `qb_linq_docs` |
+| **[`BUILDING.md`](BUILDING.md)** | CMake options, presets, `qb_linq_tests` / `qb_linq_single_header_test` / `qb_linq_benchmark` / `qb_linq_docs` / `qb_linq_single_header` |
 | **[`VERSIONING.md`](VERSIONING.md)** | SemVer, `version.h`, releases + changelog |
 | **[`CHANGELOG.md`](../CHANGELOG.md)** | Release history |
 | **[`CONTRIBUTING.md`](../CONTRIBUTING.md)** | PR workflow for humans |
@@ -18,7 +18,7 @@
 
 **Cursor skill:** [`.cursor/skills/qb-linq-development/SKILL.md`](../.cursor/skills/qb-linq-development/SKILL.md).
 
-**Stable public include:** `<qb/linq.h>` → `include/qb/linq.h` → `qb/linq/version.h` (CMake-generated under `generated_include/`) → `enumerable.h` (transitive). **`detail/*`** names are not a stable public API unless exposed through `enumerable` behavior. **Version:** `project(VERSION)` in root `CMakeLists.txt` → **`docs/VERSIONING.md`**.
+**Stable public include:** `<qb/linq.h>` → `include/qb/linq.h` → `qb/linq/version.h` (CMake-generated under `generated_include/`) → `enumerable.h` (transitive). Optional amalgam: **`single_header/linq.h`** + `-I single_header` + `#include <linq.h>` (regenerate **`qb_linq_single_header`**). **`detail/*`** names are not a stable public API unless exposed through `enumerable` behavior. **Version:** `project(VERSION)` in root `CMakeLists.txt` → **`docs/VERSIONING.md`**.
 
 **Namespace:** `qb::linq` (`qb::linq::detail` for helpers).
 

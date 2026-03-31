@@ -11,6 +11,8 @@ At configure time, CMake generates **`qb/linq/version.h`** into the build tree (
 
 **`<qb/linq.h>`** includes **`version.h`**, so you always see the same version as the CMake package.
 
+The optional drop-in **`single_header/linq.h`** embeds the same version macros (regenerate with target **`qb_linq_single_header`** after changing **`project(VERSION …)`**).
+
 ## Semantic versioning
 
 Versions follow **SemVer** (`MAJOR.MINOR.PATCH`):

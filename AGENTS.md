@@ -10,7 +10,7 @@
 | CMake target | **`qb::linq`** |
 | C++ standard | **17** |
 | Library version | **`project(qb-linq VERSION …)`** in `CMakeLists.txt` → generated **`qb/linq/version.h`** — **[`docs/VERSIONING.md`](docs/VERSIONING.md)** |
-| Layout | See README **Repository layout** and **[`docs/LLM_CONTEXT.md`](docs/LLM_CONTEXT.md)** |
+| Layout | See README **Repository layout** and **[`docs/LLM_CONTEXT.md`](docs/LLM_CONTEXT.md)**; optional amalgam **`single_header/linq.h`** (regenerate **`qb_linq_single_header`**) |
 
 **Build, presets, options, install:** **[`docs/BUILDING.md`](docs/BUILDING.md)** (aligned with root `CMakeLists.txt` and `CMakePresets.json`).
 

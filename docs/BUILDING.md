@@ -76,3 +76,11 @@ Both disable install of the fetched projects where configured in those files.
 3. Run **`ctest --preset dev`** or execute `qb_linq_tests` directly.
 
 Behaviour changes should keep **`QB_BUILD_TESTS=ON`** green; changes near hot paths should keep **`QB_BUILD_BENCHMARKS=ON`** builds green when benchmarks are enabled in CI or locally.
+
+## Single-header amalgamation
+
+| Custom target | Effect |
+|---------------|--------|
+| **`qb_linq_single_header`** | Rewrites **`single_header/linq.h`** from **`include/qb/linq/*.h`** + embedded **`version.h`** (uses **Python 3** if found, else **PowerShell** on Windows, else **`scripts/amalgamate_single_header.sh`** which expects **`python3`**). |
+
+After changing library headers or **`project(VERSION …)`**, rebuild that target and commit **`single_header/linq.h`**. CI runs **`qb_linq_single_header_test`** (include path **`single_header/`** only).
