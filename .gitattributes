@@ -1,2 +1,5 @@
-# Shell scripts must use LF so shebang works on Linux/WSL/macOS
+# Shell scripts must use LF so shebang works on Linux/WSL/macOS (avoid /bin/sh\r)
 *.sh text eol=lf
+
+# Amalgamation script: LF helps WSL/python on /mnt/d/
+scripts/amalgamate_single_header.py text eol=lf

@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **`single_header/linq.h`** — amalgamated drop-in header (same API as **`<qb/linq.h>`**); scripts **`scripts/amalgamate_single_header.{py,ps1,sh}`** and CMake target **`qb_linq_single_header`**; smoke test **`qb_linq_single_header_test`**.
 
+### Fixed
+
+- **`qb_linq_single_header`** on Unix calls **`amalgamate_single_header.py`** directly (**`python3`**) instead of **`sh`**, avoiding CRLF-broken wrappers on WSL/DrvFs. **`amalgamate_single_header.sh`** rewritten with LF-only line endings; **`.gitattributes`** keeps **`*.sh`** as **`eol=lf`**.
+
 ## [1.1.0] - 2026-04-01
 
 ### Added

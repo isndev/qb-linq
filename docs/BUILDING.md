@@ -81,6 +81,6 @@ Behaviour changes should keep **`QB_BUILD_TESTS=ON`** green; changes near hot pa
 
 | Custom target | Effect |
 |---------------|--------|
-| **`qb_linq_single_header`** | Rewrites **`single_header/linq.h`** from **`include/qb/linq/*.h`** + embedded **`version.h`** (uses **Python 3** if found, else **PowerShell** on Windows, else **`scripts/amalgamate_single_header.sh`** which expects **`python3`**). |
+| **`qb_linq_single_header`** | Rewrites **`single_header/linq.h`** from **`include/qb/linq/*.h`** + embedded **`version.h`**. Invokes **`python3`**/`python` on Unix and when **FindPython3** succeeds; on Windows without Python it uses **PowerShell**. You can always run **`python3 scripts/amalgamate_single_header.py`** from the repo root (avoids **`*.sh`** CRLF issues on WSL **`/mnt/d/`**). |
 
 After changing library headers or **`project(VERSION …)`**, rebuild that target and commit **`single_header/linq.h`**. CI runs **`qb_linq_single_header_test`** (include path **`single_header/`** only).

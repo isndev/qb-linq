@@ -93,7 +93,9 @@ Same **`namespace qb::linq`** and API as **`<qb/linq.h>`**; the version is **emb
 Regenerate after editing headers under **`include/qb/linq/`** or bumping the project version:
 
 - **CMake:** `cmake --build <build> --target qb_linq_single_header`
-- **Scripts:** `python scripts/amalgamate_single_header.py` or `pwsh -File scripts/amalgamate_single_header.ps1` (repo root)
+- **Scripts (repo root):** `python3 scripts/amalgamate_single_header.py` (Linux/macOS/WSL) · `python …` or `pwsh -File scripts/amalgamate_single_header.ps1` (Windows)
+
+On **WSL** with the repo on **`/mnt/d/...`**, Git or the drive can leave **CRLF** in `*.sh`; if `./scripts/amalgamate_single_header.sh` fails, use **`python3 scripts/amalgamate_single_header.py`** or run `sed -i 's/\r$//' scripts/amalgamate_single_header.sh` once. Prefer cloning on the Linux filesystem (`~/…`) for fewer line-ending surprises.
 
 The **`qb_linq_single_header_test`** target (see **`tests/`**) keeps this file honest in CI.
 

@@ -53,27 +53,28 @@ set_target_properties(qb-linq PROPERTIES
 )
 
 # Regenerate single_header/linq.h after editing headers under include/qb/linq/ (or bumping project VERSION).
+# Unix/macOS: always invoke python3 directly (avoids CRLF issues with .sh on /mnt/d/ etc.).
 find_package(Python3 COMPONENTS Interpreter QUIET)
+set(_qb_amalg_py "")
 if(Python3_FOUND)
+    set(_qb_amalg_py "${Python3_EXECUTABLE}")
+elseif(NOT WIN32)
+    find_program(_qb_amalg_py NAMES python3 python REQUIRED)
+endif()
+
+if(_qb_amalg_py)
     add_custom_target(qb_linq_single_header
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/amalgamate_single_header.py"
+        COMMAND "${_qb_amalg_py}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/amalgamate_single_header.py"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         COMMENT "Regenerate single_header/linq.h"
         VERBATIM
     )
-elseif(WIN32)
+else()
     add_custom_target(qb_linq_single_header
         COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
                 "${CMAKE_CURRENT_SOURCE_DIR}/scripts/amalgamate_single_header.ps1"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         COMMENT "Regenerate single_header/linq.h (PowerShell)"
-        VERBATIM
-    )
-else()
-    add_custom_target(qb_linq_single_header
-        COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/scripts/amalgamate_single_header.sh"
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-        COMMENT "Regenerate single_header/linq.h (sh + python3)"
         VERBATIM
     )
 endif()
