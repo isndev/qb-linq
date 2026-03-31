@@ -12,6 +12,7 @@ FetchContent_Declare(googletest
 FetchContent_MakeAvailable(googletest)
 
 set(_qb_linq_test_sources
+    linq_version_test.cpp
     linq_pipeline_test.cpp
     linq_terminal_test.cpp
     linq_terminals_extended_test.cpp

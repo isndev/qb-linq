@@ -76,7 +76,13 @@ MinSizeRel/
 # Clang / LLVM
 .cache/
 
-# Doxygen output (if generated under repo tree)
+# Doxygen HTML (CMake: OUTPUT_DIRECTORY = …/doc_doxygen under the build tree, usually inside build/)
+# Also ignore if someone configures an in-source or unusual binary dir:
+doc_doxygen/
+**/doc_doxygen/html/
+**/doc_doxygen/latex/
+**/doc_doxygen/man/
+# Legacy paths (older layouts)
 doc/html/
 doc/latex/
 doc/man/

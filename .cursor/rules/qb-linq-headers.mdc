@@ -1,0 +1,13 @@
+---
+description: qb-linq implementation headers — CRTP, out-of-line locations, safe patterns
+globs: include/qb/**/*.h
+alwaysApply: false
+---
+
+# qb-linq headers
+
+- **Declarations:** `detail/query_range.h` — `query_range_algorithms` members.
+- **Definitions:** Often `query.h` (materialize, join, group_by, …) or tail of `detail/extra_views.h` (concat, zip, scan, chunk, …). Check **`docs/LLM_CONTEXT.md`** for the exact split.
+- **Iterators:** Follow existing patterns in `iterators.h` and comments there; do not change iterator contracts without updating tests and docs.
+- **Out-of-line members:** Return types and signatures must match the declarations visible in the class template.
+- **`materialized_range`:** Never initialize with `owner->begin()`, `owner->end()`, and `std::move(owner)` in one call — use single-arg ctor or `wrap_materialized` (see `query.h`).

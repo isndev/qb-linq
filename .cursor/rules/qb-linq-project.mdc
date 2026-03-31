@@ -1,0 +1,12 @@
+---
+description: qb-linq — header-only C++17 LINQ; read AGENTS.md and docs/LLM_CONTEXT.md before editing
+alwaysApply: true
+---
+
+# qb-linq (project)
+
+- **Library:** Header-only C++17, `namespace qb::linq`. Public include: **`<qb/linq.h>`** only.
+- **Before edits:** **`AGENTS.md`**, **`docs/BUILDING.md`** (CMake facts), **`docs/LLM_CONTEXT.md`** (implementation map).
+- **CRTP:** Algorithms live on `detail::query_range_algorithms<Derived, Iter>`; implementations call `derived().begin()` / `end()`.
+- **Verify:** Build **`qb_linq_tests`** and run **`ctest`** when possible; preserve **`qb_linq_benchmark`** build if benchmarks touched. User-visible changes: **`CHANGELOG.md`** (`[Unreleased]`) per **`CONTRIBUTING.md`**.
+- **Scope:** Minimal, focused diffs; match surrounding style and Doxygen; do not expand scope beyond the task.

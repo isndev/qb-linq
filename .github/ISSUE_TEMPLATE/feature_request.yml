@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest an API or improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do? How does LINQ / another API solve it elsewhere?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Sketch of API names, semantics, or behaviour.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I am willing to help implement or test this in a PR
+          required: false

@@ -36,3 +36,32 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
+
+  # Ensures docs/Doxyfile.in and paths stay valid (Doxygen + CMake configure).
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Doxygen
+        run: sudo apt-get update && sudo apt-get install -y doxygen
+
+      - name: Configure (documentation only)
+        run: >
+          cmake -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DQB_BUILD_TESTS=OFF
+          -DQB_BUILD_BENCHMARKS=OFF
+          -DQB_LINQ_BUILD_DOCS=ON
+
+      - name: Build Doxygen HTML
+        run: cmake --build build --config Release --target qb_linq_docs
+
+      - name: Fail on Doxygen warnings
+        run: |
+          log="build/doxygen-qb-linq.warnings.log"
+          if [ -f "$log" ] && [ -s "$log" ]; then
+            echo "::error::Doxygen wrote warnings to $log"
+            cat "$log"
+            exit 1
+          fi

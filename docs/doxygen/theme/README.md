@@ -12,4 +12,4 @@ Assets from **[doxygen-awesome-css](https://github.com/jothepro/doxygen-awesome-
 | `doxygen-awesome-paragraph-link.js` | Permalink on headings |
 | `doxygen-awesome-interactive-toc.js` | TOC highlight + progress (needs `PAGE_OUTLINE_PANEL = NO`) |
 
-Scripts are loaded from `doc/doxygen/header.html`. Branding: `../custom.css`, `../logo.svg` (`PROJECT_LOGO` in `Doxyfile.in`).
+Scripts are loaded from `docs/doxygen/header.html`. Branding: `../custom.css`, `../logo.svg` (`PROJECT_LOGO` in `docs/Doxyfile.in`).

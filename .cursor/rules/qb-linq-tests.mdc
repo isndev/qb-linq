@@ -1,0 +1,12 @@
+---
+description: qb-linq GoogleTest suite — extend tests for behaviour changes
+globs: tests/**/*.cpp
+alwaysApply: false
+---
+
+# qb-linq tests
+
+- Framework: **GoogleTest**; target **`qb_linq_tests`**.
+- New behaviour or fixes: add/extend cases in **`tests/`** (`linq_*_test.cpp` naming).
+- Include **`#include <qb/linq.h>`** (or focused headers only if testing internals—prefer public API).
+- Run **`ctest --output-on-failure`** or the test binary after changes.

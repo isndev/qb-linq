@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/isndev/qb-linq/security/advisories/new
+    about: Report security issues privately — do not open a public issue (see SECURITY.md).
+  - name: Code of Conduct
+    url: https://github.com/isndev/qb-linq/blob/main/CODE_OF_CONDUCT.md
+    about: Community standards and enforcement.
+  - name: Contributing
+    url: https://github.com/isndev/qb-linq/blob/main/CONTRIBUTING.md
+    about: Build, test, and PR expectations.

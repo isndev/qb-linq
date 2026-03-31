@@ -1,0 +1,49 @@
+name: Bug report
+description: Something does not work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please check [`include/qb/linq.h`](https://github.com/isndev/qb-linq/blob/main/include/qb/linq.h) for documented caveats (e.g. `select_many`, `zip`/`concat`) before submitting.
+
+  - type: input
+    id: version
+    attributes:
+      label: qb-linq version or Git commit
+      description: e.g. 1.0.0 or full SHA
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - Linux
+        - macOS
+        - Windows
+    validations:
+      required: true
+
+  - type: input
+    id: compiler
+    attributes:
+      label: Compiler and version
+      placeholder: e.g. GCC 13.2, Clang 17, MSVC 14.40
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Description and minimal reproducer
+      description: Code sample or link to a small repo; expected vs actual behaviour.
+    validations:
+      required: true
+
+  - type: textarea
+    id: cmake
+    attributes:
+      label: CMake / build flags (if relevant)
+      description: Preset name or `cmake -B` line.

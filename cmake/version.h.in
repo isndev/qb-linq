@@ -1,0 +1,41 @@
+#pragma once
+
+/**
+ * @file version.h
+ * @ingroup linq
+ * @brief Library version — generated from CMake `project(qb-linq VERSION ...)`. Do not edit by hand.
+ */
+
+/** @brief Major version (semantic versioning). */
+#define QB_LINQ_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+
+/** @brief Minor version. */
+#define QB_LINQ_VERSION_MINOR @PROJECT_VERSION_MINOR@
+
+/** @brief Patch version. */
+#define QB_LINQ_VERSION_PATCH @PROJECT_VERSION_PATCH@
+
+/** @brief Version string, e.g. `"1.0.0"`. */
+#define QB_LINQ_VERSION_STRING "@PROJECT_VERSION@"
+
+/**
+ * @brief Integer for preprocessor comparison: `major*1'000'000 + minor*1'000 + patch` (minor/patch &lt; 1000).
+ * @details Example: 1.2.3 → 1002003. Use `#if QB_LINQ_VERSION_INTEGER >= 1000000` for “at least 1.0.0”.
+ */
+#define QB_LINQ_VERSION_INTEGER \
+    (QB_LINQ_VERSION_MAJOR * 1000000 + QB_LINQ_VERSION_MINOR * 1000 + QB_LINQ_VERSION_PATCH)
+
+namespace qb::linq {
+
+/**
+ * @ingroup linq
+ * @brief Compile-time library version (mirrors the `QB_LINQ_VERSION_*` macros).
+ */
+struct version {
+    static constexpr int major = QB_LINQ_VERSION_MAJOR;
+    static constexpr int minor = QB_LINQ_VERSION_MINOR;
+    static constexpr int patch = QB_LINQ_VERSION_PATCH;
+    static constexpr int integer = QB_LINQ_VERSION_INTEGER;
+};
+
+} // namespace qb::linq

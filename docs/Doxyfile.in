@@ -1,16 +1,17 @@
 # Doxygen configuration for qb-linq (configured by CMake: @CMAKE_PROJECT_NAME@)
-# HTML theme: Doxygen Awesome (doc/doxygen/theme/) + doc/doxygen/custom.css
+# HTML theme: Doxygen Awesome (docs/doxygen/theme/) + docs/doxygen/custom.css
 
 PROJECT_NAME           = @PROJECT_NAME@
 PROJECT_NUMBER         = @PROJECT_VERSION@
 PROJECT_BRIEF          = "Header-only lazy LINQ-style queries (qb framework, C++17)"
-PROJECT_LOGO           = @CMAKE_SOURCE_DIR@/doc/doxygen/logo.svg
+PROJECT_LOGO           = @CMAKE_SOURCE_DIR@/docs/doxygen/logo.svg
 
 OUTPUT_DIRECTORY       = @CMAKE_CURRENT_BINARY_DIR@/doc_doxygen
 CREATE_SUBDIRS         = NO
 
 # API headers + repository README as the landing page
 INPUT                  = @CMAKE_SOURCE_DIR@/include \
+                         @QB_LINQ_GENERATED_INCLUDE_DIR@ \
                          @CMAKE_SOURCE_DIR@/README.md
 USE_MDFILE_AS_MAINPAGE = @CMAKE_SOURCE_DIR@/README.md
 IMAGE_PATH             = @CMAKE_SOURCE_DIR@
@@ -35,7 +36,7 @@ WARN_IF_UNDOCUMENTED   = YES
 WARN_NO_PARAMDOC       = YES
 
 # -----------------------------------------------------------------------------
-# HTML — Doxygen Awesome + extensions (see doc/doxygen/theme/README.md)
+# HTML — Doxygen Awesome + extensions (see docs/doxygen/theme/README.md)
 # Requires Doxygen >= 1.9.5 (HTML_COLORSTYLE); extensions need 1.10+ / 1.14+ as noted below.
 # -----------------------------------------------------------------------------
 GENERATE_HTML          = YES
@@ -45,7 +46,7 @@ DISABLE_INDEX          = NO
 FULL_SIDEBAR           = NO
 HTML_COLORSTYLE        = LIGHT
 HTML_DYNAMIC_SECTIONS  = YES
-HTML_HEADER            = @CMAKE_SOURCE_DIR@/doc/doxygen/header.html
+HTML_HEADER            = @CMAKE_SOURCE_DIR@/docs/doxygen/header.html
 
 # Interactive TOC extension (doxygen-awesome-interactive-toc.js) — Doxygen >= 1.14
 PAGE_OUTLINE_PANEL     = NO
@@ -53,15 +54,15 @@ PAGE_OUTLINE_PANEL     = NO
 # Fragment copy-button extension replaces built-in clipboard icon (Doxygen >= 1.10)
 HTML_COPY_CLIPBOARD    = NO
 
-HTML_EXTRA_STYLESHEET  = @CMAKE_SOURCE_DIR@/doc/doxygen/theme/doxygen-awesome.css \
-                         @CMAKE_SOURCE_DIR@/doc/doxygen/theme/doxygen-awesome-sidebar-only.css \
-                         @CMAKE_SOURCE_DIR@/doc/doxygen/custom.css \
-                         @CMAKE_SOURCE_DIR@/doc/doxygen/theme/doxygen-awesome-sidebar-only-darkmode-toggle.css
+HTML_EXTRA_STYLESHEET  = @CMAKE_SOURCE_DIR@/docs/doxygen/theme/doxygen-awesome.css \
+                         @CMAKE_SOURCE_DIR@/docs/doxygen/theme/doxygen-awesome-sidebar-only.css \
+                         @CMAKE_SOURCE_DIR@/docs/doxygen/custom.css \
+                         @CMAKE_SOURCE_DIR@/docs/doxygen/theme/doxygen-awesome-sidebar-only-darkmode-toggle.css
 
-HTML_EXTRA_FILES       = @CMAKE_SOURCE_DIR@/doc/doxygen/theme/doxygen-awesome-darkmode-toggle.js \
-                         @CMAKE_SOURCE_DIR@/doc/doxygen/theme/doxygen-awesome-fragment-copy-button.js \
-                         @CMAKE_SOURCE_DIR@/doc/doxygen/theme/doxygen-awesome-paragraph-link.js \
-                         @CMAKE_SOURCE_DIR@/doc/doxygen/theme/doxygen-awesome-interactive-toc.js
+HTML_EXTRA_FILES       = @CMAKE_SOURCE_DIR@/docs/doxygen/theme/doxygen-awesome-darkmode-toggle.js \
+                         @CMAKE_SOURCE_DIR@/docs/doxygen/theme/doxygen-awesome-fragment-copy-button.js \
+                         @CMAKE_SOURCE_DIR@/docs/doxygen/theme/doxygen-awesome-paragraph-link.js \
+                         @CMAKE_SOURCE_DIR@/docs/doxygen/theme/doxygen-awesome-interactive-toc.js
 
 GENERATE_LATEX         = NO
 GENERATE_XML           = NO
@@ -69,7 +70,9 @@ GENERATE_XML           = NO
 OPTIMIZE_OUTPUT_FOR_C  = NO
 INLINE_INHERITED_MEMB  = NO
 FULL_PATH_NAMES        = YES
-STRIP_FROM_PATH        = @CMAKE_SOURCE_DIR@/include
+# Strip install-style paths in HTML (hand-written headers + CMake-generated version.h)
+STRIP_FROM_PATH        = @CMAKE_SOURCE_DIR@/include \
+                         @QB_LINQ_GENERATED_INCLUDE_DIR@
 
 MACRO_EXPANSION        = YES
 EXPAND_ONLY_PREDEF     = NO

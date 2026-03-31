@@ -11,6 +11,14 @@ project(qb-linq
 
 include(GNUInstallDirs)
 
+# Generated public header: single source of truth is project(VERSION …) above.
+set(QB_LINQ_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated_include")
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.h.in"
+    "${QB_LINQ_GENERATED_INCLUDE_DIR}/qb/linq/version.h"
+    @ONLY
+)
+
 # Top-level vs subdirectory: enable tests by default only when this is the root project.
 if(PROJECT_IS_TOP_LEVEL)
     set(_qb_default_build_tests ON)
@@ -35,6 +43,7 @@ add_library(qb::linq ALIAS qb-linq)
 
 target_include_directories(qb-linq INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${QB_LINQ_GENERATED_INCLUDE_DIR}>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_compile_features(qb-linq INTERFACE cxx_std_17)
@@ -60,6 +69,7 @@ if(QB_LINQ_BUILD_DOCS)
     if(DOXYGEN_FOUND)
         set(QB_LINQ_DOXYFILE_IN "${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.in")
         set(QB_LINQ_DOXYFILE_OUT "${CMAKE_CURRENT_BINARY_DIR}/Doxyfile.qb-linq")
+        # QB_LINQ_GENERATED_INCLUDE_DIR is set at top level (version.h for Doxygen INPUT)
         configure_file("${QB_LINQ_DOXYFILE_IN}" "${QB_LINQ_DOXYFILE_OUT}" @ONLY)
         add_custom_target(qb_linq_docs
             COMMAND "${DOXYGEN_EXECUTABLE}" "${QB_LINQ_DOXYFILE_OUT}"
@@ -76,6 +86,8 @@ endif()
 # Install + CMake package: find_package(qb-linq CONFIG) → qb::linq
 # -----------------------------------------------------------------------------
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+install(FILES "${QB_LINQ_GENERATED_INCLUDE_DIR}/qb/linq/version.h"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/qb/linq")
 
 install(TARGETS qb-linq
     EXPORT qb-linq-targets
