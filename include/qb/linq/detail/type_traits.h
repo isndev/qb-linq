@@ -64,7 +64,7 @@ struct identity_proj {
      * @tparam T Typically `reference` from the sequence; universal reference.
      */
     template <class T>
-    [[nodiscard]] std::decay_t<T> operator()(T&& x) const
+    [[nodiscard]] constexpr std::decay_t<T> operator()(T&& x) const
     {
         return std::forward<T>(x);
     }

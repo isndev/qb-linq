@@ -114,7 +114,7 @@ struct group_by_impl<In> {
      * @param vec Leaf bucket for one terminal key path.
      * @param val Stored as `remove_cvref_t<In>`.
      */
-    static void emplace(type& vec, In const& val) { vec.push_back(static_cast<element_t>(val)); }
+    static void emplace(type& vec, In const& val) { vec.emplace_back(static_cast<element_t>(val)); }
 };
 
 /**

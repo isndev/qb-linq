@@ -31,7 +31,10 @@ TEST(SurfaceReduce, SingleElementReturnsValue)
 TEST(SurfaceTake, IntMinYieldsNoElements)
 {
     std::vector<int> const data{1, 2, 3};
-    EXPECT_EQ(qb::linq::from(data).take(std::numeric_limits<int>::min()).long_count(), 0u);
+    // PTRDIFF_MIN is the only value whose negation overflows → yields 0
+    EXPECT_EQ(qb::linq::from(data).take(std::numeric_limits<std::ptrdiff_t>::min()).long_count(), 0u);
+    // INT_MIN is a valid magnitude now (2147483648); taken from 3 elements → 3
+    EXPECT_EQ(qb::linq::from(data).take(std::numeric_limits<int>::min()).long_count(), 3u);
 }
 
 TEST(SurfaceZip, TwoFullPassesMatch)

@@ -184,17 +184,19 @@ public:
     /** @brief First element; throws `std::out_of_range("qb::linq::first")` if empty. @return `reference` into sequence. */
     [[nodiscard]] reference first() const
     {
-        if (!any())
+        iterator it = derived().begin();
+        if (it == derived().end())
             throw std::out_of_range("qb::linq::first");
-        return *derived().begin();
+        return *it;
     }
 
     /** @brief `value_type{}` if empty, else first element (by value). */
     [[nodiscard]] value_type first_or_default() const
     {
-        if (!any())
+        iterator it = derived().begin();
+        if (it == derived().end())
             return value_type{};
-        return *derived().begin();
+        return *it;
     }
 
     /** @brief First element satisfying `pred`; throws `qb::linq::first_if` if none. */
@@ -219,20 +221,43 @@ public:
         return value_type{};
     }
 
-    /** @brief Last element (bidirectional / forward to `end`); throws if empty. */
-    [[nodiscard]] reference last() const
+    /**
+     * @brief Last element; throws if empty.
+     * @details Uses `std::prev(end())` for bidirectional+ iterators; falls back to a forward scan otherwise.
+     */
+    [[nodiscard]] value_type last() const
     {
-        if (!any())
+        iterator b = derived().begin();
+        iterator const e = derived().end();
+        if (b == e)
             throw std::out_of_range("qb::linq::last");
-        return *std::prev(derived().end());
+        using cat = typename std::iterator_traits<iterator>::iterator_category;
+        if constexpr (std::is_base_of_v<std::bidirectional_iterator_tag, cat>) {
+            return *std::prev(e);
+        } else {
+            value_type out = *b;
+            for (++b; b != e; ++b)
+                out = *b;
+            return out;
+        }
     }
 
-    /** @brief Default if empty; else last element by value. */
+    /** @brief Default if empty; else last element by value. Works with forward iterators. */
     [[nodiscard]] value_type last_or_default() const
     {
-        if (!any())
+        iterator b = derived().begin();
+        iterator const e = derived().end();
+        if (b == e)
             return value_type{};
-        return *std::prev(derived().end());
+        using cat = typename std::iterator_traits<iterator>::iterator_category;
+        if constexpr (std::is_base_of_v<std::bidirectional_iterator_tag, cat>) {
+            return *std::prev(e);
+        } else {
+            value_type out = *b;
+            for (++b; b != e; ++b)
+                out = *b;
+            return out;
+        }
     }
 
     /** @brief Last element matching `pred` (full scan); throws if no match. */
@@ -531,7 +556,7 @@ public:
     }
 
     /** @brief At most `n` elements (`n` may be negative — magnitude used; see `take_n_view`). */
-    [[nodiscard]] take_n_view<iterator> take(int n) const
+    [[nodiscard]] take_n_view<iterator> take(std::ptrdiff_t n) const
     {
         return take_n_view<iterator>(derived().begin(), derived().end(), n);
     }
@@ -638,11 +663,12 @@ public:
     /** @brief Minimum by `operator<`; throws if empty. */
     [[nodiscard]] value_type min() const
     {
-        if (!any())
-            throw std::out_of_range("qb::linq::min");
         iterator it = derived().begin();
+        iterator const e = derived().end();
+        if (it == e)
+            throw std::out_of_range("qb::linq::min");
         value_type best = *it;
-        for (++it; it != derived().end(); ++it) {
+        for (++it; it != e; ++it) {
             if (*it < best)
                 best = *it;
         }
@@ -652,11 +678,12 @@ public:
     /** @brief Maximum by `operator<`; throws if empty. */
     [[nodiscard]] value_type max() const
     {
-        if (!any())
-            throw std::out_of_range("qb::linq::max");
         iterator it = derived().begin();
+        iterator const e = derived().end();
+        if (it == e)
+            throw std::out_of_range("qb::linq::max");
         value_type best = *it;
-        for (++it; it != derived().end(); ++it) {
+        for (++it; it != e; ++it) {
             if (best < *it)
                 best = *it;
         }
@@ -667,11 +694,12 @@ public:
     template <class Comp>
     [[nodiscard]] value_type min(Comp comp) const
     {
-        if (!any())
-            throw std::out_of_range("qb::linq::min");
         iterator it = derived().begin();
+        iterator const e = derived().end();
+        if (it == e)
+            throw std::out_of_range("qb::linq::min");
         value_type best = *it;
-        for (++it; it != derived().end(); ++it) {
+        for (++it; it != e; ++it) {
             if (comp(*it, best))
                 best = *it;
         }
@@ -682,11 +710,12 @@ public:
     template <class Comp>
     [[nodiscard]] value_type max(Comp comp) const
     {
-        if (!any())
-            throw std::out_of_range("qb::linq::max");
         iterator it = derived().begin();
+        iterator const e = derived().end();
+        if (it == e)
+            throw std::out_of_range("qb::linq::max");
         value_type best = *it;
-        for (++it; it != derived().end(); ++it) {
+        for (++it; it != e; ++it) {
             if (comp(best, *it))
                 best = *it;
         }
@@ -696,12 +725,13 @@ public:
     /** @brief One pass: `(min, max)` by `operator<`; throws if empty. */
     [[nodiscard]] std::pair<value_type, value_type> min_max() const
     {
-        if (!any())
-            throw std::out_of_range("qb::linq::min_max");
         iterator it = derived().begin();
+        iterator const e = derived().end();
+        if (it == e)
+            throw std::out_of_range("qb::linq::min_max");
         value_type lo = *it;
         value_type hi = *it;
-        for (++it; it != derived().end(); ++it) {
+        for (++it; it != e; ++it) {
             if (*it < lo)
                 lo = *it;
             if (hi < *it)
@@ -714,12 +744,13 @@ public:
     template <class Comp>
     [[nodiscard]] std::pair<value_type, value_type> min_max(Comp comp) const
     {
-        if (!any())
-            throw std::out_of_range("qb::linq::min_max");
         iterator it = derived().begin();
+        iterator const e = derived().end();
+        if (it == e)
+            throw std::out_of_range("qb::linq::min_max");
         value_type lo = *it;
         value_type hi = *it;
-        for (++it; it != derived().end(); ++it) {
+        for (++it; it != e; ++it) {
             if (comp(*it, lo))
                 lo = *it;
             if (comp(hi, *it))
@@ -728,32 +759,47 @@ public:
         return {lo, hi};
     }
 
-    /** @brief `value_type{}` if empty. */
+    /** @brief `value_type{}` if empty; else minimum. Single pass (no double iteration). */
     [[nodiscard]] value_type min_or_default() const
     {
-        if (!any())
+        iterator it = derived().begin();
+        iterator const e = derived().end();
+        if (it == e)
             return value_type{};
-        return min();
+        value_type best = *it;
+        for (++it; it != e; ++it) {
+            if (*it < best)
+                best = *it;
+        }
+        return best;
     }
 
-    /** @brief `value_type{}` if empty. */
+    /** @brief `value_type{}` if empty; else maximum. Single pass (no double iteration). */
     [[nodiscard]] value_type max_or_default() const
     {
-        if (!any())
+        iterator it = derived().begin();
+        iterator const e = derived().end();
+        if (it == e)
             return value_type{};
-        return max();
+        value_type best = *it;
+        for (++it; it != e; ++it) {
+            if (best < *it)
+                best = *it;
+        }
+        return best;
     }
 
     /** @brief Element with minimum `key(*it)` (`key` return type uses `operator<`). */
     template <class KF>
     [[nodiscard]] value_type min_by(KF&& key) const
     {
-        if (!any())
-            throw std::out_of_range("qb::linq::min_by");
         iterator it = derived().begin();
+        iterator const e = derived().end();
+        if (it == e)
+            throw std::out_of_range("qb::linq::min_by");
         value_type best = *it;
         auto kb = key(*it);
-        for (++it; it != derived().end(); ++it) {
+        for (++it; it != e; ++it) {
             auto const k = key(*it);
             if (k < kb) {
                 kb = k;
@@ -767,12 +813,13 @@ public:
     template <class KF>
     [[nodiscard]] value_type max_by(KF&& key) const
     {
-        if (!any())
-            throw std::out_of_range("qb::linq::max_by");
         iterator it = derived().begin();
+        iterator const e = derived().end();
+        if (it == e)
+            throw std::out_of_range("qb::linq::max_by");
         value_type best = *it;
         auto kb = key(*it);
-        for (++it; it != derived().end(); ++it) {
+        for (++it; it != e; ++it) {
             auto const k = key(*it);
             if (kb < k) {
                 kb = k;
@@ -782,22 +829,44 @@ public:
         return best;
     }
 
-    /** @brief `min_by` or default if empty. */
+    /** @brief `min_by` or default if empty. Single pass. */
     template <class KF>
     [[nodiscard]] value_type min_by_or_default(KF&& key) const
     {
-        if (!any())
+        iterator it = derived().begin();
+        iterator const e = derived().end();
+        if (it == e)
             return value_type{};
-        return min_by(std::forward<KF>(key));
+        value_type best = *it;
+        auto kb = key(*it);
+        for (++it; it != e; ++it) {
+            auto const k = key(*it);
+            if (k < kb) {
+                kb = k;
+                best = *it;
+            }
+        }
+        return best;
     }
 
-    /** @brief `max_by` or default if empty. */
+    /** @brief `max_by` or default if empty. Single pass. */
     template <class KF>
     [[nodiscard]] value_type max_by_or_default(KF&& key) const
     {
-        if (!any())
+        iterator it = derived().begin();
+        iterator const e = derived().end();
+        if (it == e)
             return value_type{};
-        return max_by(std::forward<KF>(key));
+        value_type best = *it;
+        auto kb = key(*it);
+        for (++it; it != e; ++it) {
+            auto const k = key(*it);
+            if (kb < k) {
+                kb = k;
+                best = *it;
+            }
+        }
+        return best;
     }
 
     /** @brief Fused filter + `+=`: no `where_iterator` overhead. */
