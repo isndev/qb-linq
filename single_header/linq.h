@@ -831,16 +831,26 @@ public:
     }
 
     /**
-     * @brief Last element; throws if empty. Returns a reference into the range (requires bidirectional iterators).
-     * @details For forward-only iterators, use `last_or_default()` or `last_if()` instead (these return by value).
+     * @brief Last element; throws if empty.
+     * @details Returns a reference for bidirectional+ iterators (`std::prev`). For forward-only iterators a
+     *          linear scan locates the last position and the result is returned by value.
+     * @throws std::out_of_range with message `qb::linq::last` when the sequence is empty.
      */
-    [[nodiscard]] reference last() const
+    [[nodiscard]] decltype(auto) last() const
     {
         iterator b = derived().begin();
         iterator const e = derived().end();
         if (b == e)
             throw std::out_of_range("qb::linq::last");
-        return *std::prev(e);
+        using cat = typename std::iterator_traits<iterator>::iterator_category;
+        if constexpr (std::is_base_of_v<std::bidirectional_iterator_tag, cat>) {
+            return *std::prev(e);
+        } else {
+            iterator prev = b;
+            for (++b; b != e; ++b)
+                prev = b;
+            return static_cast<value_type>(*prev);
+        }
     }
 
     /**
@@ -864,21 +874,19 @@ public:
         }
     }
 
-    /** @brief Last element matching `pred` (full scan); throws if no match. */
+    /** @brief Last element matching `pred` (full scan); throws if no match.
+     *  @details Does not require `value_type` to be default-constructible. */
     template <class Pred>
     [[nodiscard]] value_type last_if(Pred&& pred) const
     {
-        bool found = false;
-        value_type out{};
+        std::optional<value_type> out;
         for (iterator it = derived().begin(); it != derived().end(); ++it) {
-            if (pred(*it)) {
-                out = *it;
-                found = true;
-            }
+            if (pred(*it))
+                out.emplace(static_cast<value_type>(*it));
         }
-        if (!found)
+        if (!out)
             throw std::out_of_range("qb::linq::last_if");
-        return out;
+        return std::move(*out);
     }
 
     /** @brief Last match by value, or default if none. */
@@ -1833,23 +1841,22 @@ public:
         return *b;
     }
 
-    /** @brief Unique match under `pred`; throws if 0 or >1 matches. */
+    /** @brief Unique match under `pred`; throws if 0 or >1 matches.
+     *  @details Does not require `value_type` to be default-constructible. */
     template <class Pred>
     [[nodiscard]] value_type single_if(Pred&& pred) const
     {
-        bool found = false;
-        value_type val{};
+        std::optional<value_type> val;
         for (iterator it = derived().begin(); it != derived().end(); ++it) {
             if (pred(*it)) {
-                if (found)
+                if (val)
                     throw std::out_of_range("qb::linq::single_if: more than one match");
-                val = *it;
-                found = true;
+                val.emplace(static_cast<value_type>(*it));
             }
         }
-        if (!found)
+        if (!val)
             throw std::out_of_range("qb::linq::single_if: no match");
-        return val;
+        return std::move(*val);
     }
 
     /** @brief At most one match: value or default; default if ambiguous. */

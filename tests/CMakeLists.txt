@@ -43,6 +43,7 @@ set(_qb_linq_test_sources
     linq_exceptions_test.cpp
     linq_property_fuzz_test.cpp
     linq_improvements_test.cpp
+    linq_audit_test.cpp
 )
 
 add_executable(qb_linq_tests ${_qb_linq_test_sources})
