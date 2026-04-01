@@ -222,27 +222,22 @@ public:
     }
 
     /**
-     * @brief Last element; throws if empty.
-     * @details Uses `std::prev(end())` for bidirectional+ iterators; falls back to a forward scan otherwise.
+     * @brief Last element; throws if empty. Returns a reference into the range (requires bidirectional iterators).
+     * @details For forward-only iterators, use `last_or_default()` or `last_if()` instead (these return by value).
      */
-    [[nodiscard]] value_type last() const
+    [[nodiscard]] reference last() const
     {
         iterator b = derived().begin();
         iterator const e = derived().end();
         if (b == e)
             throw std::out_of_range("qb::linq::last");
-        using cat = typename std::iterator_traits<iterator>::iterator_category;
-        if constexpr (std::is_base_of_v<std::bidirectional_iterator_tag, cat>) {
-            return *std::prev(e);
-        } else {
-            iterator prev = b;
-            for (++b; b != e; ++b)
-                prev = b;
-            return *prev;
-        }
+        return *std::prev(e);
     }
 
-    /** @brief Default if empty; else last element by value. Works with forward iterators. */
+    /**
+     * @brief Default if empty; else last element by value.
+     * @details Works with forward-only iterators: uses `std::prev` for bidirectional+, iterator scan otherwise.
+     */
     [[nodiscard]] value_type last_or_default() const
     {
         iterator b = derived().begin();
