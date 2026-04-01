@@ -237,13 +237,13 @@ Unless noted, methods are **`const`** and return a new **`enumerable`** for lazy
 
 | API | Role |
 |-----|------|
-| **`first()`** / **`last()`** | Throws if empty. |
-| **`first_or_default()`** / **`last_or_default()`** | Value or `value_type{}`. |
-| **`first_if` / `first_or_default_if`** | Predicate. |
-| **`last_if` / `last_or_default_if`** | Predicate (last match). |
-| **`element_at(i)`** / **`element_at_or_default(i)`** | Zero-based index. |
-| **`single()`** / **`single_or_default()`** | Exactly one element (or default). |
-| **`single_if` / `single_or_default_if`** | Exactly one match for predicate. |
+| **`first()`** / **`last()`** | Throws if empty. `last()` works with forward-only iterators (linear scan; bidirectional+ uses `std::prev`). |
+| **`first_or_default()`** / **`last_or_default()`** | Value or `value_type{}` (requires default-constructible `value_type`). |
+| **`first_if` / `first_or_default_if`** | Predicate. `*_or_default_if` requires default-constructible `value_type`. |
+| **`last_if` / `last_or_default_if`** | Predicate (last match). `last_or_default_if` requires default-constructible `value_type`; `last_if` does not. |
+| **`element_at(i)`** / **`element_at_or_default(i)`** | Zero-based index. `*_or_default` requires default-constructible `value_type`. |
+| **`single()`** / **`single_or_default()`** | Exactly one element (or default). `single_or_default` requires default-constructible `value_type`. |
+| **`single_if` / `single_or_default_if`** | Exactly one match for predicate. `single_or_default_if` requires default-constructible `value_type`; `single_if` does not. |
 | **`sequence_equal(rhs)`** / **`sequence_equal(rhs, comp)`** | Pairwise compare two ranges. |
 
 ### Min / max (by value or key)

@@ -52,8 +52,12 @@
  * - **`left_join`** / **`right_join`** pass **`std::optional`** (by `const` reference) for the side that may be
  *   missing; the result selector must accept that shape (see README relational table).
  * - Terminals such as `first()`, `last()`, `element_at()`, `single()` may return **`reference`** (via
- *   `decltype(auto)` through `enumerable`). Do not store those references past iterator invalidation —
- *   same rules as holding references into a live container or a `select` projection.
+ *   `decltype(auto)` through `enumerable`). `last()` on forward-only iterators returns **by value** (linear
+ *   scan). Do not store references past iterator invalidation — same rules as holding references into a
+ *   live container or a `select` projection.
+ * - **`*_or_default` / `*_or_default_if` variants** (e.g. `first_or_default`, `single_or_default_if`)
+ *   return `value_type{}` and therefore **require default-constructible `value_type`**. The throwing variants
+ *   (`last_if`, `single_if`) use `std::optional` internally and do **not** require default construction.
  * - **`sum` / `sum_if`** require `value_type` to be default-constructible and to support `operator+=`.
  * - **`except` / `intersect`** (and **`except_by` / `intersect_by` / `union_by`**) follow **.NET**-style set semantics
  *   on values or **keys**: at most one output per distinct value or key, **first-seen** order as documented on each

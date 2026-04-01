@@ -144,6 +144,9 @@ qb/linq.h
 ### 5.6 Element access terminals
 
 - `first`, `last`, `element_at`, `single` families; many throw `std::out_of_range` with messages prefixed **`qb::linq::`**.
+- **`last()`:** supports both bidirectional+ (`std::prev`, returns reference) and forward-only (linear scan, returns by value) via `constexpr if`.
+- **`last_if` / `single_if`:** use `std::optional<value_type>` internally — do **not** require default-constructible `value_type`.
+- **`*_or_default` / `*_or_default_if` variants:** return `value_type{}` and therefore **require** default-constructible `value_type`.
 
 ---
 

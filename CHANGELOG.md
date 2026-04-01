@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`last()`:** Now works with **forward-only** iterators (linear scan fallback). Previously required bidirectional iterators (`std::prev`). Bidirectional+ paths still use `std::prev` and return by reference; forward-only returns by value.
+- **`last_if`:** No longer requires **default-constructible** `value_type`. Uses `std::optional` internally instead of pre-initializing `value_type{}`.
+- **`single_if`:** No longer requires **default-constructible** `value_type`. Uses `std::optional` internally instead of pre-initializing `value_type{}`.
+
+### Added
+
+- **Tests (`linq_audit_test.cpp`):** 81 audit tests covering forward-only `last()`, non-default-constructible types with `last_if`/`single_if`, append/prepend edge cases, enumerate, chunk, stride, repeated enumeration, laziness verification, empty/single-element inputs, join edge cases, duplicate handling, factories, sequence equality, scan, zip, default-if-empty, aggregates, exceptions, zip-fold, and `std::forward_list` (strictly forward iterators).
+
 ## [1.3.0] - 2026-04-01
 
 ### Fixed
