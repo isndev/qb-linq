@@ -23,6 +23,7 @@ add_executable(qb_linq_benchmark
     bench_set_ops.cpp
     bench_statistics.cpp
     bench_lazy_extra.cpp
+    bench_scan_contract.cpp
     bench_chunk_enumerate.cpp
     bench_where_minmax.cpp
     bench_zip_tail.cpp

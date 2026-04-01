@@ -20,7 +20,8 @@
  * - **enumerate_view:** `(index, element)` pairs; index starts at 0.
  * - **chunk_view:** each `operator*` copies up to `n` elements into an internal `std::vector` (lazy per chunk).
  * - **stride_view:** step clamped to at least 1.
- * - **scan_view:** yields running `f(acc, x)`; empty source → no values; `F` stored in `shared_ptr`.
+ * - **scan_view:** yields running `f(acc, x)`; empty source → no values; `F` stored in the view; iterators hold a
+ *   non-owning `F*` (no refcount); iterators must not outlive the `scan_view` they came from.
  *
  * @par Types in this header
  * | Iterator / view | Role |
@@ -269,6 +270,8 @@ public:
  * @brief Forward iterator over `[a_begin,a_end)` then `[b_begin,b_end)`.
  * @tparam It1 First range iterator.
  * @tparam It2 Second range iterator; `value_type` must match `It1` (after removing cv).
+ * @details `reference` is the conditional-operator common type of `*It1` and `*It2` so mixed `T&` / `T const&`
+ *          legs (e.g. `union_with` on a `const` right-hand range) remain valid.
  */
 template <class It1, class It2>
 class concat_iterator {
@@ -285,7 +288,8 @@ public:
     using value_type = typename std::iterator_traits<It1>::value_type;
     using difference_type = std::ptrdiff_t;
     using pointer = void;
-    using reference = typename std::iterator_traits<It1>::reference;
+    /** @brief Common reference of both legs (`int&` + `const int&` → `const int&`); not only `It1::reference`. */
+    using reference = decltype(false ? *std::declval<It1&>() : *std::declval<It2&>());
 
     /** @brief Default; for end-sentinel construction use `is_end == true`. */
     concat_iterator() = default;
@@ -1061,15 +1065,16 @@ struct scan_acc_cache<Acc, true> {
 
 /**
  * @ingroup linq
- * @brief Caches the next accumulator value; `F` shared with other iterators via `shared_ptr`.
- * @details End iterator holds `cur == end` and null `f_`.
+ * @brief Caches the next accumulator value; `fn` points at the owning view’s `F` (null at end / inactive).
+ * @details End iterator holds `cur == end` and null `fn_`. Callers must not dereference iterators past the
+ *          lifetime of the `scan_view` that supplied `fn_`.
  */
 template <class BaseIt, class Acc, class F>
 class scan_iterator {
     BaseIt cur_{};
     BaseIt end_{};
     Acc acc_{};
-    std::shared_ptr<F> f_{};
+    F* fn_{};
     mutable scan_acc_cache<Acc> cache_{};
 
 public:
@@ -1091,38 +1096,38 @@ public:
      * @param b Source begin.
      * @param e Source end.
      * @param seed Initial accumulator (before first element).
-     * @param fn Binary op `Acc f(Acc, element)`; shared across iterators.
+     * @param fn Address of the fold function in the parent `scan_view`, or null.
      */
-    scan_iterator(BaseIt b, BaseIt e, Acc seed, std::shared_ptr<F> fn)
-        : cur_(std::move(b)), end_(std::move(e)), acc_(std::move(seed)), f_(std::move(fn))
+    scan_iterator(BaseIt b, BaseIt e, Acc seed, F* fn)
+        : cur_(std::move(b)), end_(std::move(e)), acc_(std::move(seed)), fn_(fn)
     {
         if (cur_ == end_)
-            f_.reset();
+            fn_ = nullptr;
     }
 
     /** @brief Next accumulated value (lazy; cached on first read per position). */
     [[nodiscard]] reference operator*() const
     {
-        if (!f_)
+        if (!fn_)
             throw std::out_of_range("qb::linq::scan_iterator::operator*");
         if (!cache_.has())
-            cache_.assign((*f_)(acc_, *cur_));
+            cache_.assign((*fn_)(acc_, *cur_));
         return cache_.ref();
     }
 
     /** @brief Advance: commit accumulator, clear cache, step base. */
     scan_iterator& operator++()
     {
-        if (!f_)
+        if (!fn_)
             return *this;
         if (cache_.has())
             acc_ = std::move(cache_.ref());
         else
-            acc_ = (*f_)(acc_, *cur_);
+            acc_ = (*fn_)(acc_, *cur_);
         cache_.clear();
         ++cur_;
         if (cur_ == end_)
-            f_.reset();
+            fn_ = nullptr;
         return *this;
     }
 
@@ -1137,7 +1142,7 @@ public:
     /** @brief Equality on position and active fold state. */
     [[nodiscard]] friend bool operator==(scan_iterator const& a, scan_iterator const& b) noexcept
     {
-        return a.cur_ == b.cur_ && static_cast<bool>(a.f_) == static_cast<bool>(b.f_);
+        return a.cur_ == b.cur_ && static_cast<bool>(a.fn_) == static_cast<bool>(b.fn_);
     }
     [[nodiscard]] friend bool operator!=(scan_iterator const& a, scan_iterator const& b) noexcept
     {
@@ -1153,23 +1158,26 @@ template <class BaseIt, class Acc, class F>
 class scan_view : public query_range_algorithms<scan_view<BaseIt, Acc, F>, scan_iterator<BaseIt, Acc, F>> {
     BaseIt b_{}, e_{};
     Acc seed_{};
-    std::shared_ptr<F> f_{};
+    /** @brief `mutable` so `begin() const` can expose `F*` for non-const callables under the same rules as
+     *         `shared_ptr<F>::get()` in a const member function. */
+    mutable F fn_{};
 
 public:
     /**
      * @param b Source begin.
      * @param e Source end.
      * @param s Seed accumulator.
-     * @param fn Fold function (stored in `shared_ptr`).
+     * @param fn Fold function (stored in the view).
      */
     scan_view(BaseIt b, BaseIt e, Acc s, F fn)
-        : b_(std::move(b)), e_(std::move(e)), seed_(std::move(s)), f_(std::make_shared<F>(std::move(fn)))
+        : b_(std::move(b)), e_(std::move(e)), seed_(std::move(s)), fn_(std::move(fn))
     {}
 
-    /** @brief Iterator at `b` with seed and shared `F`. */
+    /** @brief Iterator at `b` with seed; points at this view’s `fn_` (null when `[b,e)` empty). */
     [[nodiscard]] scan_iterator<BaseIt, Acc, F> begin() const
     {
-        return scan_iterator<BaseIt, Acc, F>(b_, e_, seed_, f_);
+        F* p = (b_ == e_) ? nullptr : std::addressof(fn_);
+        return scan_iterator<BaseIt, Acc, F>(b_, e_, seed_, p);
     }
     /** @brief End (no yields when `[b,e)` empty). */
     [[nodiscard]] scan_iterator<BaseIt, Acc, F> end() const
@@ -1192,7 +1200,7 @@ query_range_algorithms<Derived, Iter>::enumerate() const
     return enumerate_view<iterator_t>(derived().begin(), derived().end());
 }
 
-/** @brief Out-of-line `scan`: prefix fold with `shared_ptr` to `F`. */
+/** @brief Out-of-line `scan`: prefix fold; `F` lives in the returned `scan_view`. */
 template <class Derived, class Iter>
 template <class Acc, class F>
 scan_view<Iter, std::decay_t<Acc>, std::decay_t<F>> query_range_algorithms<Derived, Iter>::scan(

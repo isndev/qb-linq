@@ -41,6 +41,15 @@ TEST(EachSideEffect, VisitsEveryElementInOrder)
     EXPECT_EQ(e.sum(), 6);
 }
 
+/** `each` runs eagerly before returning; in-place mutation must work without using the returned `enumerable`. */
+TEST(EachSideEffect, InPlaceMutationDiscardingReturn)
+{
+    std::vector<int> data{1, 2, 3, 4};
+    qb::linq::from(data).each([](int& x) { x *= 2; });
+    std::vector<int> const expect{2, 4, 6, 8};
+    EXPECT_EQ(data, expect);
+}
+
 TEST(MaterializeAlias, SameAsToVector)
 {
     std::vector<int> const data{4, 5, 6};

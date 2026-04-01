@@ -26,7 +26,7 @@ Versions follow **SemVer** (`MAJOR.MINOR.PATCH`):
 | Symbol | Meaning |
 |--------|---------|
 | **`QB_LINQ_VERSION_MAJOR`**, **`MINOR`**, **`PATCH`** | Preprocessor integers |
-| **`QB_LINQ_VERSION_STRING`** | String literal, e.g. `"1.2.0"` |
+| **`QB_LINQ_VERSION_STRING`** | String literal, e.g. `"1.2.1"` |
 | **`QB_LINQ_VERSION_INTEGER`** | `major*1'000'000 + minor*1'000 + patch` for `#if` (minor/patch &lt; 1000) |
 | **`qb::linq::version`** | `constexpr` struct mirroring the macros |
 
@@ -58,7 +58,7 @@ find_package(qb-linq 1.2 CONFIG REQUIRED)
 1. Bump **`project(... VERSION x.y.z)`** in **`CMakeLists.txt`**.
 2. Reconfigure CMake (regenerates **`version.h`**).
 3. Update **[`CHANGELOG.md`](../CHANGELOG.md)** — move **`[Unreleased]`** items into a new **`[x.y.z] - YYYY-MM-DD`** section.
-4. Tag the repo (**`v1.2.0`**, etc.) and publish GitHub release notes (can mirror the changelog entry).
+4. Tag the repo (**`v1.2.1`**, **`v1.3.0`**, etc.) and publish GitHub release notes (can mirror the changelog entry).
 
 ## Vendoring without CMake
 

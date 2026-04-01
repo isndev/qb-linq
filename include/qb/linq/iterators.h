@@ -20,6 +20,11 @@
  * | `where_iterator` | Skip-until-predicate (`Where`) |
  * | `take_while_iterator` | Prefix while predicate (`TakeWhile`) |
  * | `take_n_iterator` | Prefix of length N (`Take`) |
+ * | `detail::compressed_fn<F>` | Empty-base storage for `F` in `select` / `where` / `take_while` iterators when `F` is an empty class |
+ *
+ * @par MSVC note
+ * Iterator adaptors and `compressed_fn<F,true>` use `__declspec(empty_bases)` so an empty `F` participates in
+ * EBO under multiple inheritance (otherwise `sizeof` can be `sizeof(BaseIt)` plus a full padding slot).
  */
 
 #include <algorithm>
@@ -29,6 +34,13 @@
 #include <utility>
 
 #include "qb/linq/detail/type_traits.h"
+
+/** MSVC: enable empty-base optimization across multiple inheritance (otherwise `sizeof` can double). */
+#if defined(_MSC_VER)
+#define QB_LINQ_ITER_EMPTY_BASES __declspec(empty_bases)
+#else
+#define QB_LINQ_ITER_EMPTY_BASES
+#endif
 
 namespace qb::linq {
 
@@ -43,6 +55,32 @@ template <class Cat>
 using clamp_iterator_category_t =
     std::conditional_t<std::is_base_of_v<std::random_access_iterator_tag, Cat>,
         std::bidirectional_iterator_tag, Cat>;
+
+/**
+ * @brief Stores `F` with empty-base optimization when `F` is an empty class type (C++17).
+ */
+template <class F, bool Ebo = std::is_class_v<F>&& std::is_empty_v<F>&& !std::is_final_v<F>>
+struct compressed_fn;
+
+template <class F>
+struct QB_LINQ_ITER_EMPTY_BASES compressed_fn<F, true> : private F {
+    explicit compressed_fn(F fn) noexcept(std::is_nothrow_move_constructible_v<F>)
+        : F(std::move(fn))
+    {}
+    F& fn() noexcept { return static_cast<F&>(*this); }
+    F const& fn() const noexcept { return static_cast<F const&>(*this); }
+};
+
+template <class F>
+struct compressed_fn<F, false> {
+    F fn_;
+
+    explicit compressed_fn(F fn) noexcept(std::is_nothrow_move_constructible_v<F>)
+        : fn_(std::move(fn))
+    {}
+    F& fn() noexcept { return fn_; }
+    F const& fn() const noexcept { return fn_; }
+};
 
 } // namespace detail
 
@@ -116,7 +154,9 @@ public:
  * @tparam F Callable `reference -> R` (reference type may preserve `R` as lvalue/rvalue ref).
  */
 template <class BaseIt, class F>
-class select_iterator : public BaseIt {
+class QB_LINQ_ITER_EMPTY_BASES select_iterator : public BaseIt, private detail::compressed_fn<F> {
+    using fn_holder = detail::compressed_fn<F>;
+
 public:
     using iterator_category = typename std::iterator_traits<BaseIt>::iterator_category;
     using projected_t =
@@ -138,7 +178,7 @@ public:
      */
     select_iterator(BaseIt base, F fn) noexcept(
         std::is_nothrow_move_constructible_v<BaseIt>&& std::is_nothrow_move_constructible_v<F>)
-        : BaseIt(std::move(base)), fn_(std::move(fn))
+        : BaseIt(std::move(base)), fn_holder(std::move(fn))
     {}
 
     /**
@@ -192,18 +232,15 @@ public:
     [[nodiscard]] reference operator*() const
         noexcept(noexcept(std::declval<F const&>()(*std::declval<BaseIt const&>())))
     {
-        return fn_(*static_cast<BaseIt const&>(*this));
+        return static_cast<fn_holder const&>(*this).fn()(*static_cast<BaseIt const&>(*this));
     }
 
     /** @brief Projected value from `fn(*base)` (mutable path). */
     [[nodiscard]] reference operator*() noexcept(noexcept(std::declval<F const&>()(*std::declval<BaseIt&>())))
     {
-        return fn_(*static_cast<BaseIt&>(*this));
+        return static_cast<fn_holder&>(*this).fn()(*static_cast<BaseIt&>(*this));
     }
     /** @} */
-
-private:
-    F fn_;
 };
 
 /**
@@ -214,7 +251,9 @@ private:
  * @note Iterator category is at most bidirectional even if `BaseIt` is random-access.
  */
 template <class BaseIt, class Pred>
-class where_iterator : public BaseIt {
+class QB_LINQ_ITER_EMPTY_BASES where_iterator : public BaseIt, private detail::compressed_fn<Pred> {
+    using pred_holder = detail::compressed_fn<Pred>;
+
 public:
     using iterator_category = detail::clamp_iterator_category_t<
         typename std::iterator_traits<BaseIt>::iterator_category>;
@@ -237,9 +276,9 @@ public:
      */
     where_iterator(BaseIt current, BaseIt begin, BaseIt end, Pred pred)
         : BaseIt(std::move(current))
+        , pred_holder(std::move(pred))
         , begin_(std::move(begin))
         , end_(std::move(end))
-        , pred_(std::move(pred))
     {}
 
     /**
@@ -260,9 +299,10 @@ public:
     /** @brief Advance to next element satisfying `pred`; stop at `end_`. */
     where_iterator& operator++()
     {
+        Pred const& pr = static_cast<pred_holder const&>(*this).fn();
         do {
             ++static_cast<BaseIt&>(*this);
-        } while (static_cast<BaseIt const&>(*this) != end_ && !pred_(*static_cast<BaseIt const&>(*this)));
+        } while (static_cast<BaseIt const&>(*this) != end_ && !pr(*static_cast<BaseIt const&>(*this)));
         return *this;
     }
 
@@ -278,15 +318,16 @@ public:
     where_iterator& operator--()
     {
         BaseIt& cur = static_cast<BaseIt&>(*this);
+        Pred const& pr = static_cast<pred_holder const&>(*this).fn();
 
         // Logical end sits at underlying \p end_; do not dereference there.
         if (cur == end_) {
             if (begin_ == end_)
                 return *this;
             --cur;
-            while (cur != begin_ && !pred_(*cur))
+            while (cur != begin_ && !pr(*cur))
                 --cur;
-            if (!pred_(*cur))
+            if (!pr(*cur))
                 cur = end_;
             return *this;
         }
@@ -298,9 +339,9 @@ public:
         }
 
         --cur;
-        while (cur != begin_ && !pred_(*cur))
+        while (cur != begin_ && !pr(*cur))
             --cur;
-        if (!pred_(*cur))
+        if (!pr(*cur))
             cur = end_;
         return *this;
     }
@@ -317,7 +358,6 @@ public:
 private:
     BaseIt begin_;
     BaseIt end_;
-    Pred pred_;
 };
 
 /**
@@ -327,7 +367,9 @@ private:
  * @tparam Pred Predicate; must not be invoked on the end iterator of the peer range in `operator==`.
  */
 template <class BaseIt, class Pred>
-class take_while_iterator : public BaseIt {
+class QB_LINQ_ITER_EMPTY_BASES take_while_iterator : public BaseIt, private detail::compressed_fn<Pred> {
+    using pred_holder = detail::compressed_fn<Pred>;
+
 public:
     using iterator_category = detail::clamp_iterator_category_t<
         typename std::iterator_traits<BaseIt>::iterator_category>;
@@ -346,7 +388,7 @@ public:
      */
     take_while_iterator(BaseIt base, Pred pred) noexcept(
         std::is_nothrow_move_constructible_v<BaseIt>&& std::is_nothrow_move_constructible_v<Pred>)
-        : BaseIt(std::move(base)), pred_(std::move(pred))
+        : BaseIt(std::move(base)), pred_holder(std::move(pred))
     {}
     /** @} */
 
@@ -395,7 +437,7 @@ public:
         BaseIt const& R = static_cast<BaseIt const&>(rhs);
         if (L == R)
             return true;
-        if (!pred_(*L))
+        if (!static_cast<pred_holder const&>(*this).fn()(*L))
             return true;
         return false;
     }
@@ -403,9 +445,6 @@ public:
     /** @brief Negation of `operator==`. */
     [[nodiscard]] bool operator!=(take_while_iterator const& rhs) const { return !(*this == rhs); }
     /** @} */
-
-private:
-    Pred pred_;
 };
 
 /**
@@ -413,7 +452,8 @@ private:
  * @brief Takes at most `N` elements from the base range (`Take`); `remaining` pairs with end sentinel.
  * @tparam BaseIt Source iterator.
  * @details `remaining_` counts consumed elements; end iterator uses `remaining == 0`. Negative `take` counts
- *          are normalized in the view (`take_n_view`), not here.
+ *          are normalized in the view (`take_n_view`), not here. After the final yield, `operator++` reaches
+ *          `remaining_ == 0` **without** advancing the base iterator again, so filtered tails are not traversed.
  */
 template <class BaseIt>
 class take_n_iterator : public BaseIt {
@@ -444,11 +484,17 @@ public:
 
     /** @name Traversal */
     /** @{ */
-    /** @brief Consume one element: increment `remaining_` and advance base. */
+    /**
+     * @brief Step toward logical end: bump `remaining_` toward `0`; advance base only while more yields remain.
+     * @details When `remaining_` reaches `0`, the base position is **not** advanced further — the logical range is
+     *          exhausted (`operator==` matches `end` via `remaining_`). That avoids walking the rest of a filtered
+     *          underlying sequence (e.g. `where` predicates) after the last taken element.
+     */
     take_n_iterator& operator++() noexcept(noexcept(++std::declval<BaseIt&>()))
     {
         ++remaining_;
-        ++static_cast<BaseIt&>(*this);
+        if (remaining_ < 0)
+            ++static_cast<BaseIt&>(*this);
         return *this;
     }
 
@@ -497,6 +543,8 @@ private:
 };
 
 } // namespace qb::linq
+
+#undef QB_LINQ_ITER_EMPTY_BASES
 
 /**
  * @brief Ensure `std::iterator_traits` reports the clamped category for adaptors that inherit a random-access

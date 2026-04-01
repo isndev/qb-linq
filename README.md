@@ -107,7 +107,7 @@ The **`qb_linq_single_header_test`** target (see **`tests/`**) keeps this file h
 1. **`enumerable<Handle>`** — fluent façade; each lazy step returns a new `enumerable`.
 2. **`query_range_algorithms` (CRTP)** — algorithms use `derived().begin()` / `end()`.
 3. **Terminals** — `sum`, `to_vector`, `first`, `order_by`, `group_by`, … trigger real work (many materialize via `shared_ptr`).
-4. **Caveats** — `select_many` = **tuple per row** (not C# flatten); `except`/`intersect` need **hashable** `value_type`; `zip`/`concat` inner pipelines may need **copy-assignable** functors (`+[](){}`). Full notes in [`qb/linq.h`](include/qb/linq.h).
+4. **Caveats** — `select_many` = **tuple per row** (not C# flatten); `except`/`intersect` need **hashable** `value_type`; `zip`/`concat` inner pipelines may need **copy-assignable** functors (`+[](){}`); **`to_vector()`** / **`materialize()`** return an **`enumerable`** wrapping **`materialized_range`** (not a raw **`std::vector`**); **`scan`** iterators must not outlive the **`scan_view`**. Full notes in [`qb/linq.h`](include/qb/linq.h).
 
 ---
 
@@ -152,7 +152,7 @@ Unless noted, methods are **`const`** and return a new **`enumerable`** for lazy
 | **`take(n)`** | Take `n` (`int`; negative magnitude like LINQ; `INT_MIN` → empty). |
 | **`take_while(pred)`** | Take while predicate true. |
 | **`skip_last(n)`** / **`take_last(n)`** | Materialize then trim head/tail. |
-| **`reverse()`** | Reverse view (bidirectional base). |
+| **`reverse()`** | Reverse order (underlying chain must be bidirectional). Composes correctly with **`take(n)`** and **`take_while(pred)`** via dedicated bounds (logical prefix only). |
 
 ### Composition & extra lazy views
 
@@ -198,7 +198,7 @@ Unless noted, methods are **`const`** and return a new **`enumerable`** for lazy
 
 | API | Role |
 |-----|------|
-| **`to_vector()`** | Copy to `std::vector` (random-access reserve when possible). |
+| **`to_vector()`** | Eager materialization: returns **`enumerable<materialized_range<…>>`** owning a **`std::vector`** via **`shared_ptr`** (iterate, chain further, or copy out — not a **`std::vector`** prvalue). Random-access sources may **`reserve`**. |
 | **`materialize()`** | Alias of **`to_vector()`**. |
 | **`to_set()`** / **`to_unordered_set()`** | Unique sets. |
 | **`to_map(keyf, elemf)`** | `std::map` (ordered keys). |
@@ -416,12 +416,14 @@ ctest --test-dir build --output-on-failure
 
 ## Performance & benchmarks
 
-The [`benchmarks/`](benchmarks/) suite (Google Benchmark) compares many **qb-linq** paths against small **hand-written loops** in the same translation unit. Enable it with **`QB_BUILD_BENCHMARKS=ON`** (see above), then run the **`qb_linq_benchmark`** executable. **All timings are machine-, compiler-, and flag-specific**; use them for **local regression checks**, not as absolute promises.
+The [`benchmarks/`](benchmarks/) suite (Google Benchmark) compares many **qb-linq** paths against small **hand-written loops** in the same translation unit. Enable it with **`QB_BUILD_BENCHMARKS=ON`** (see above), then run the **`qb_linq_benchmark`** executable. **All timings are machine-, compiler-, and flag-specific**; use them for **local regression checks**, not as absolute promises. For **`scan`** iterator copies vs a straight range-for, and **`select`** with an empty class functor vs a large callable object, see **`benchmarks/bench_scan_contract.cpp`**.
 
 **What to expect**
 
 - **Simple terminals on a plain range** (e.g. **`sum`** on **`from(vector)`**) are usually **close** to a naive loop: the hot path is still a forward iteration with little extra logic.
 - **Lazy stacks** (**`select`**, **`where`**, **`concat`**, **`stride`**, **`scan`**, …) add **real work**: wrapped iterators, stored callables, and sometimes **downgraded iterator categories** versus raw pointers or index loops. A noticeable gap versus a single fused loop is **normal**, especially on MSVC, where heavy template layering does not always optimize away completely.
+- **`scan`** stores the fold functor in the **`scan_view`**; iterators hold a **non-owning pointer** to it (no `shared_ptr` / atomic refcount). Treat it like a standard range: **do not keep `scan_iterator`s past the lifetime of the view** that produced them.
+- **`select` / `where` / `take_while`** store callables with **empty-base optimization** when `F` is an empty class type (C++17), shrinking iterator objects for stateless function objects. On **MSVC**, iterator adaptors use **`__declspec(empty_bases)`** so an empty `F` does not double the iterator size under multiple inheritance.
 - **Materializers** such as **`to_vector()`** build a **`materialized_range`** backed by **`std::shared_ptr`**. You pay for that **ownership model**, not just element copying—expect a **higher** cost than `reserve` + `push_back` into a bare **`std::vector`** with no shared handle.
 - **Views that allocate per step** (e.g. **`chunk`**, which fills a **`std::vector`** per chunk) are inherently more expensive than one pass over scalars.
 - Some benchmarks compare **different algorithms** (e.g. **one-pass Welford** variance vs a **two-pass** sum-of-squares formulation). A gap there reflects **numerics and work per element**, not a broken **`sum`**.

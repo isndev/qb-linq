@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.22)
 # qb-linq — header-only query library (qb framework)
 # -----------------------------------------------------------------------------
 project(qb-linq
-    VERSION 1.2.0
+    VERSION 1.2.1
     DESCRIPTION "Header-only lazy LINQ-style queries for C++17 (qb framework)"
     LANGUAGES CXX
 )

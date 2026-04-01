@@ -59,6 +59,13 @@
  *   as the inner operand.
  * - Views are **not** thread-safe; `where_view` caches the first matching position on the first `begin()`.
  *   Do not share a pipeline across threads without external synchronization.
+ * - **`to_vector()`** / **`materialize()`** return **`enumerable<materialized_range<…>>`** (a forwarding range backed by
+ *   **`shared_ptr<std::vector<value_type>>`**), not a plain **`std::vector`**. Use range-based `for`, iterators, or
+ *   further pipeline methods; assign into a **`std::vector`** only with an explicit loop or algorithm if required.
+ * - **`scan`:** `scan_iterator` holds a non-owning pointer to the fold functor in **`scan_view`**; iterator values must
+ *   **not** outlive the **`scan_view`** they came from.
+ * - **`reverse()`** with **`take`** / **`take_while`:** the library applies dedicated **`reversed_view`** logic so reversal
+ *   stays on the **logical** accepted prefix (requires a bidirectional adapted chain).
  *
  * @par Implementation map (headers)
  * | Area | Header |
@@ -67,6 +74,7 @@
  * | Range handles, `materialized_range`, `iota` | `qb/linq/query.h` |
  * | Algorithms CRTP | `qb/linq/detail/query_range.h` |
  * | Iterator adaptors | `qb/linq/iterators.h` |
+ * | Reverse iterator adaptor | `qb/linq/reverse_iterator.h` |
  * | Extra lazy views (`concat`, `zip`, `scan`, …) | `qb/linq/detail/extra_views.h` |
  * | `group_by` map shape | `qb/linq/detail/group_by.h` |
  * | `order_by` keys | `qb/linq/detail/order.h` |

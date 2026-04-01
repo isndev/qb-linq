@@ -79,6 +79,19 @@ TEST(UnionWith, ConcatThenDistinct)
     EXPECT_TRUE(qb::linq::from(u).sequence_equal(expect));
 }
 
+/** `union_with(Rng const&)` uses const iterators on the RHS; `concat_iterator` must use a common reference type. */
+TEST(UnionWith, MutableLeftConstRightCompilesAndDedupes)
+{
+    std::vector<int> a{1, 2, 3, 4};
+    std::vector<int> const b{3, 4, 5};
+    std::vector<int> collected;
+    for (int x : qb::linq::from(a).union_with(b))
+        collected.push_back(x);
+    std::sort(collected.begin(), collected.end());
+    std::vector<int> const expect{1, 2, 3, 4, 5};
+    EXPECT_EQ(collected, expect);
+}
+
 TEST(JoinInner, NoMatchesYieldsEmpty)
 {
     std::vector<Person> const people{{1, "Ann"}};

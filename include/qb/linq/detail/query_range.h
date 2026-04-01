@@ -8,7 +8,7 @@
  * @details
  * **CRTP:** `Derived` must expose `begin()` and `end()` returning `Iter`. All algorithms forward to
  * `derived().begin()` / `derived().end()` so `where_view` remains cheap to construct (`find_if` runs only on
- * the first `begin()`, result cached in the view).
+ * the first `begin()`, first matching iterator cached in the view — see `where_view` in `query.h`).
  *
  * @par Materialization helpers
  * `reserve_if_random_access(c, b, e)` calls `c.reserve(e - b)` only when `[b,e)` is random-access, avoiding an
@@ -388,7 +388,8 @@ public:
 
     /**
      * @brief Running fold: yields `f(acc, x)` after each element `x`, starting from `seed`.
-     * @details Empty source → empty scan. Implementation stores `F` in a `shared_ptr` (`extra_views.h`).
+     * @details Empty source → empty scan. `F` is stored in the returned `scan_view`; iterators hold a non-owning
+     *          pointer and must not outlive that view (`extra_views.h`).
      */
     template <class Acc, class F>
     [[nodiscard]] scan_view<iterator, std::decay_t<Acc>, std::decay_t<F>> scan(Acc&& seed, F&& f) const;

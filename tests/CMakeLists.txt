@@ -33,6 +33,8 @@ set(_qb_linq_test_sources
     linq_boundaries_empty_test.cpp
     linq_search_comparison_test.cpp
     linq_zip_take_where_test.cpp
+    linq_predicates_robustness_test.cpp
+    linq_scan_and_iterator_layout_test.cpp
     linq_terminal_minmax_stats_test.cpp
     linq_surfaces_test.cpp
     linq_chaining_linq_style_test.cpp

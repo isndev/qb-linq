@@ -9,7 +9,7 @@ This document matches the **root [`CMakeLists.txt`](../CMakeLists.txt)**, **[`CM
 | Item | Value |
 |------|--------|
 | **CMake project** | `qb-linq` |
-| **Version** | `1.2.0` (`project(... VERSION 1.2.0)`) |
+| **Version** | `1.2.1` (`project(... VERSION 1.2.1)`) |
 | **Library type** | **INTERFACE** — no compiled `.lib` / `.a`; headers only |
 | **CMake target** | `qb::linq` (alias of `qb-linq`) |
 | **Include interface** | `include/` plus **`generated_include/`** (build tree) — holds **`qb/linq/version.h`** generated from **`project(VERSION)`** |

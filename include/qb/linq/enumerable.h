@@ -476,11 +476,13 @@ public:
     /** @name Side effects */
     /** @{ */
     /**
-     * @brief Invokes `f` on each element, then returns a copy of this pipeline stage (safe for chaining).
-     * @details Does not consume into a new owning range; further operations re-walk the sequence.
+     * @brief Invokes `f` on each element (eager), then returns this pipeline stage for optional chaining.
+     * @details The underlying `query_range_algorithms::each` runs the full pass before this returns; mutating
+     *          `f` side effects apply even if you do not use the returned `enumerable`. The return value is
+     *          only needed to continue chaining (e.g. `each(...).where(...)`).
      */
     template <class F>
-    [[nodiscard]] enumerable each(F&& f) const&
+    enumerable each(F&& f) const&
     {
         static_cast<Handle const&>(*this).each(std::forward<F>(f));
         return enumerable(static_cast<Handle const&>(*this));
@@ -488,7 +490,7 @@ public:
 
     /** @brief Non-`const` `enumerable&` overload of `each`. */
     template <class F>
-    [[nodiscard]] enumerable each(F&& f) &
+    enumerable each(F&& f) &
     {
         static_cast<Handle const&>(*this).each(std::forward<F>(f));
         return enumerable(static_cast<Handle const&>(*this));

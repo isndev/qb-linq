@@ -32,6 +32,8 @@
 | **Iterator type parameter** | `Iter` is explicit on `query_range_algorithms` to break incomplete-type cycles between views and algorithm mixin. |
 | **Lazy vs eager** | Lazy: building a view is cheap; work on iterator advance / dereference or when a **terminal** runs. Eager: terminals that return scalars, `each`, or materializers that allocate and fill containers. |
 | **Ownership** | Most materialized results are `materialized_range<IteratorIntoOwner, Owner>` with `std::shared_ptr<Owner>`. Iterators remain valid while the `materialized_range` (or copies sharing the `shared_ptr`) live. |
+| **`scan_view` lifetime** | Fold functor `F` lives in the view; `scan_iterator` holds a raw `F*` — iterators must not outlive the `scan_view` (unlike the older `shared_ptr<F>` design, which kept `F` alive for copied iterators after the view was destroyed). |
+| **Functor storage (EBO)** | `detail::compressed_fn<F>` in `iterators.h`: empty class `F` uses private base-class storage (C++17 EBO) inside `select_iterator`, `where_iterator`, `take_while_iterator`. **MSVC:** those types and `compressed_fn<F,true>` use `__declspec(empty_bases)` so an empty `F` does not inflate `sizeof` under multiple inheritance. |
 | **No `std::ranges`** | C++17 only; all composition is custom iterators + CRTP. |
 
 ---
@@ -42,12 +44,14 @@
 qb/linq.h
   └─ qb/linq/enumerable.h
         └─ qb/linq/query.h
+              ├─ qb/linq/detail/lazy_copy_once.h
               ├─ qb/linq/detail/query_range.h
               │     ├─ qb/linq/detail/group_by.h
               │     ├─ qb/linq/detail/order.h
               │     └─ qb/linq/detail/type_traits.h
               ├─ qb/linq/iterators.h
               │     └─ qb/linq/detail/type_traits.h
+              ├─ qb/linq/reverse_iterator.h
               └─ qb/linq/detail/extra_views.h
                     (defines concat/zip/scan/chunk/stride/distinct/enumerate/default_if_empty/empty/single/repeat
                      + out-of-line bodies for several `query_range_algorithms` methods)
@@ -64,11 +68,11 @@ qb/linq.h
 | `query_state<Iter>` | `query.h` | Stores `begin_`, `end_`; exposes `begin()`/`end()`. Base for many views. Inherits `query_range_algorithms<query_state<Iter>, Iter>`. |
 | `from_range<RawIter>` | `query.h` | `query_state<basic_iterator<RawIter>>` — wraps raw iterators in class-type `basic_iterator`. |
 | `select_view<BaseIt,F>` | `query.h` | `query_state<select_iterator<BaseIt,F>>`. |
-| `where_view<BaseIt,P>` | `query.h` | **Special:** inherits `query_range_algorithms<where_view<…>, where_iterator<…>>` directly (not `query_state`). Caches first match in `mutable std::optional<BaseIt> first_` on first `begin()`. |
+| `where_view<BaseIt,P>` | `query.h` | **Special:** inherits `query_range_algorithms<where_view<…>, where_iterator<…>>` directly (not `query_state`). Caches first match in `mutable detail::lazy_copy_once<BaseIt>` (`detail/lazy_copy_once.h`): **no heap**, `BaseIt` need not be default-constructible (fixes `reverse().where` vs `std::optional<BaseIt>` on libstdc++). |
 | `take_n_view<BaseIt>` | `query.h` | `take_n_iterator` with signed “remaining” budget; `take(n)` normalizes negative/`INT_MIN`. |
 | `take_while_view<BaseIt,P>` | `query.h` | Logical end via `take_while_iterator::operator==`. |
 | `subrange<Iter>` | `query.h` | `skip` / `skip_while` return type. |
-| `reversed_view<Iter>` | `query.h` | `std::reverse_iterator` over source range. |
+| `reversed_view<Iter>` | `query.h` | Primary: `query_state<reverse_iterator<Iter>>` from physical `[begin,end)`. **Specializations:** `reversed_view<take_n_iterator<B>>` scans to logical exhaustion, then `reverse_iterator` with optional **base-only** bump past last taken element (sentinel `operator==` would otherwise break `take().reverse()`). `reversed_view<take_while_iterator<B,P>>` scans with `while (cur != sen)`, then **`query_state<reverse_iterator<B>>`** only — do **not** nest `take_while_iterator` inside `reverse_iterator` (asymmetric `operator==` would collapse the reversed range). |
 | `iota_view<T>` | `query.h` | `query_range_algorithms<iota_view<T>, iota_iterator<T>>`; half-open `[first,last)` by value. |
 | `materialized_range<Iter,Owner>` | `query.h` | `query_state<Iter>` + `shared_ptr<Owner>`. **UB pitfall:** see §8. |
 
@@ -84,9 +88,11 @@ qb/linq.h
 | `select_iterator<BaseIt,F>` | inherits `BaseIt` | `F fn_` | `operator*` → `fn_(*base)`. **Copy-assign:** only updates **base** position; **does not assign `fn_`** (MSVC `std::find_if` assigns iterators; lambdas with ref capture may lack copy-assign). |
 | `where_iterator<BaseIt,Pred>` | inherits `BaseIt` | `begin_`, `end_`, `pred_` | Category **clamped** to at most bidirectional (`clamp_iterator_category_t`). `++` skips non-matching. **Copy-assign:** updates base + bounds, **not `pred_`** (same rationale as `select_iterator`). |
 | `take_while_iterator` | inherits `BaseIt` | `pred_` | Category clamped; logical `operator==`. |
-| `take_n_iterator` | inherits `BaseIt` | `int remaining_` (begin uses negated budget from `take_n_view`) | Category clamped; `++` increments `remaining_` and base. |
+| `take_n_iterator` | inherits `BaseIt` | `int remaining_` (begin uses negated budget from `take_n_view`) | Category clamped; `++` bumps `remaining_` toward `0` and advances base **only if** `remaining_ < 0` after the bump (no walk past the last taken element). |
 
 **Projection typing:** `select_iterator::reference` uses `detail::projection_reference_t<R>` from `type_traits.h` (preserve lvalue/rvalue ref from projection return type).
+
+**Reverse adaptor (`reverse_iterator.h`, not `iterators.h`):** `qb::linq::reverse_iterator<Iterator>` mirrors `std::reverse_iterator` semantics (`base()`, `*`, `++`/`--`) but **has no default constructor**. Random-access-only members are enabled with **dependent** `enable_if_ra_base<BaseIt>` (not `enable_if_t<ra_v, int> = 0`), so the class template is well-formed when the base is **bidirectional-only** (e.g. clamped `take_n_iterator`). Used by `reversed_view` and `materialized_range::reverse()`.
 
 ---
 
@@ -174,6 +180,8 @@ qb/linq.h
 
 7. **`select_many`:** Semantics ≠ C# `SelectMany`; returns **tuple** of projections.
 
+8. **`reverse()` after `take` / `take_while`:** See `reversed_view` specializations in `query.h`. Regression coverage: `PredicatesRobustness.ReverseAfterTake*`, `ReverseAfterTakeWhile*` (prefix, empty, single element, exhaustion at physical end, `take(0)`, large `n`, `skip` + `take_while`).
+
 ---
 
 ## 9. `extra_views.h` — view / iterator catalog
@@ -183,14 +191,14 @@ qb/linq.h
 | `empty_view<T>` | forward | Always empty. |
 | `single_view<T>` | forward | One element. |
 | `repeat_view<T>` | forward | Counted repeats. |
-| `concat_view` | **forward** | `concat_iterator`: two legs + `in_first_` flag; `++` branches. |
+| `concat_view` | **forward** | `concat_iterator`: two legs + `in_first_` flag; `++` branches. **`reference`** is `decltype(false ? *It1& : *It2&)` so e.g. `int&` ∪ `const int&` from `union_with(const rng)` compiles. |
 | `zip_view` | forward | `zip_iterator`; ends at shorter range. |
 | `default_if_empty_view` | forward | Yields default once if source empty. |
 | `distinct_view` | forward | **`unordered_set` per `begin()`** for seen keys (re-enumeration correct). |
 | `enumerate_view` | forward | `(index, *it)` pairs. |
 | `chunk_view` | forward | **`chunk_iterator`:** each `++` fills internal **`vector`** chunk (`load_chunk`). |
 | `stride_view` | forward (`stride_iterator` advertises forward) | `++` uses RA `+= step` when base is RA, else stepped loop. |
-| `scan_view` | forward | **`F` stored in `shared_ptr<F>`**; iterator holds acc + cache for `operator*`. |
+| `scan_view` | forward | **`F` in the view** (`mutable` for const `begin()`); iterator holds **`F*`** + acc + `scan_acc_cache` for `operator*`. No refcount. |
 
 **Out-of-line `query_range_algorithms` split:**
 
@@ -221,13 +229,14 @@ qb/linq.h
 
 - **Out-of-line member templates:** The definition’s return type and parameter types must match what the class template declares; different spellings of the same type can fail on some compilers. Follow the existing pattern in `query.h` for materializing operations.
 - **`select_iterator` / `where_iterator`:** Copy assignment updates iterator position (and `where_iterator` range bounds) but **does not** assign stored callables; this matches the documented behavior in `iterators.h` and interacts with how standard algorithms assign iterators.
+- **`std::optional` and iterator types:** Do not store pipeline iterators in `std::optional<BaseIt>` when `BaseIt` may be non–default-constructible. That broke `reverse().where(…)` on GCC/libstdc++. **Fix:** `where_view` uses `detail::lazy_copy_once<BaseIt>` (aligned storage + placement new, no heap). Remaining `optional` uses: `optional<size_t>` in `index_of` / `last_index_of`, and `scan_acc_cache`’s `optional<Acc>` for accumulators only (not iterators).
 
 ---
 
 ## 13. Verification hooks (repository)
 
-- **Tests:** `tests/*.cpp` (GoogleTest); CMake `QB_BUILD_TESTS`.
-- **Benchmarks:** `benchmarks/*.cpp` (Google Benchmark); `QB_BUILD_BENCHMARKS` → `qb_linq_benchmark`.
+- **Tests:** `tests/*.cpp` (GoogleTest; 300+ cases); CMake `QB_BUILD_TESTS`. **`linq_scan_and_iterator_layout_test.cpp`** — `scan` semantics / copies, `std::partial_sum` parity, EBO `sizeof` via a minimal one-pointer RA iterator; optional `vector::iterator` checks when `sizeof(VecIt)==sizeof(int*)` (else `GTEST_SKIP`). **`linq_predicates_robustness_test.cpp`** — reference / const-RHS pipelines, `take` short-circuiting, **`reverse`** after **`take` / `take_while`** edge cases.
+- **Benchmarks:** `benchmarks/*.cpp` (Google Benchmark); `QB_BUILD_BENCHMARKS` → `qb_linq_benchmark`. **`bench_scan_contract.cpp`** — `scan` stress (per-step iterator copy) vs straight walk; **`select`** empty vs fat functor.
 - **Human README:** performance expectations — root `README.md` section **Performance & benchmarks**.
 
 ---

@@ -11,14 +11,14 @@
  * this header directly.
  *
  * @par Dependency order
- * `query_range.h` (declarations) → `iterators.h` → `extra_views.h` (definitions) → template bodies below for
+ * `query_range.h` (declarations) → `iterators.h` → `reverse_iterator.h` → `extra_views.h` (definitions) → template bodies below for
  * `group_by`, `order_by`, `to_*`, `join`, set ops (require complete `materialized_range`).
  *
  * @par Types in this header
  * | Type | Role |
  * |------|------|
  * | `query_state` | Minimal `[begin,end)` + CRTP algorithms |
- * | `reversed_view` | `std::reverse_iterator` adapter |
+ * | `reversed_view` | `qb::linq::reverse_iterator` adapter (no default ctor on adaptor) |
  * | `subrange` | Slice after `skip` / `skip_while` |
  * | `from_range` | `basic_iterator` wrapper for raw iterators |
  * | `select_view` / `where_view` / `take_n_view` / `take_while_view` | Lazy views |
@@ -33,7 +33,6 @@
 #include <limits>
 #include <map>
 #include <memory>
-#include <optional>
 #include <set>
 #include <stdexcept>
 #include <tuple>
@@ -41,8 +40,10 @@
 #include <utility>
 #include <vector>
 
+#include "qb/linq/detail/lazy_copy_once.h"
 #include "qb/linq/detail/query_range.h"
 #include "qb/linq/iterators.h"
+#include "qb/linq/reverse_iterator.h"
 #include "qb/linq/detail/extra_views.h"
 
 namespace qb::linq {
@@ -111,12 +112,12 @@ public:
 
 /**
  * @ingroup linq
- * @brief Reverse iteration over `[src.begin(), src.end())` using `std::reverse_iterator`.
- * @tparam Iter Underlying iterator type from the adapted range.
+ * @brief Reverse iteration over `[src.begin(), src.end())` using `qb::linq::reverse_iterator`.
+ * @tparam Iter Underlying iterator type from the adapted range (at least bidirectional).
  */
 template <class Iter>
-class reversed_view : public query_state<std::reverse_iterator<Iter>> {
-    using base_t = query_state<std::reverse_iterator<Iter>>;
+class reversed_view : public query_state<reverse_iterator<Iter>> {
+    using base_t = query_state<reverse_iterator<Iter>>;
 
 public:
     /**
@@ -126,7 +127,97 @@ public:
      */
     template <class Rng, class = std::void_t<decltype(std::declval<Rng>().begin())>>
     explicit reversed_view(Rng const& src)
-        : base_t(std::reverse_iterator<Iter>(src.end()), std::reverse_iterator<Iter>(src.begin()))
+        : base_t(reverse_iterator<Iter>(src.end()), reverse_iterator<Iter>(src.begin()))
+    {}
+};
+
+/**
+ * @ingroup linq
+ * @brief `take_n_iterator` uses `(physical_end, 0)` as a logical end sentinel (`operator==` matches any `(base, 0)`).
+ *        Generic `reversed_view` would wrap that physical end and walk the whole underlying range; scan once to the
+ *        exhausted position. An exhausted iterator still sits **on** the last element (`remaining_ == 0`); `reverse_iterator`
+ *        needs a position one **past** that element on the underlying base, so only `BaseIt` is bumped (`remaining_`
+ *        unchanged).
+ */
+template <class BaseIt>
+class reversed_view<take_n_iterator<BaseIt>> : public query_state<reverse_iterator<take_n_iterator<BaseIt>>> {
+    using It = take_n_iterator<BaseIt>;
+    using base_t = query_state<reverse_iterator<It>>;
+
+    static It scan_logical_end(It b, It const& sen)
+    {
+        It cur = std::move(b);
+        while (cur != sen)
+            ++cur;
+        return cur;
+    }
+
+    static It bump_base_past_last(It exh)
+    {
+        It r = std::move(exh);
+        ++static_cast<BaseIt&>(r);
+        return r;
+    }
+
+    template <class Rng>
+    static base_t make_bounds(Rng const& src)
+    {
+        It b = src.begin();
+        It const sen = src.end();
+        It exh = scan_logical_end(It(b), sen);
+        if (b == exh) {
+            reverse_iterator<It> const r(b);
+            return base_t(r, r);
+        }
+        if (static_cast<BaseIt const&>(exh) == static_cast<BaseIt const&>(sen))
+            return base_t(reverse_iterator<It>(std::move(exh)), reverse_iterator<It>(std::move(b)));
+        return base_t(reverse_iterator<It>(bump_base_past_last(std::move(exh))), reverse_iterator<It>(std::move(b)));
+    }
+
+public:
+    template <class Rng, class = std::void_t<decltype(std::declval<Rng>().begin())>>
+    explicit reversed_view(Rng const& src)
+        : base_t(make_bounds(src))
+    {}
+};
+
+/**
+ * @ingroup linq
+ * @brief After a forward scan, the logical end iterator sits on the **first failing** element; its underlying base is a
+ *        valid half-open end for the accepted prefix (unlike `take_n_iterator`, which stops **on** the last taken
+ *        element). Reverse using `reverse_iterator<BaseIt>` only: nesting `take_while_iterator` inside `reverse_iterator`
+ *        breaks equality (asymmetric `operator==`; predicate on the left can equate unrelated positions).
+ */
+template <class BaseIt, class Pred>
+class reversed_view<take_while_iterator<BaseIt, Pred>> : public query_state<reverse_iterator<BaseIt>> {
+    using Tw = take_while_iterator<BaseIt, Pred>;
+    using base_t = query_state<reverse_iterator<BaseIt>>;
+
+    template <class Rng>
+    static base_t make_bounds(Rng const& src)
+    {
+        Tw b = src.begin();
+        Tw const sen = src.end();
+        Tw cur = b;
+        bool any_step = false;
+        while (cur != sen) {
+            any_step = true;
+            ++cur;
+        }
+        Tw exh = std::move(cur);
+        BaseIt const bb = static_cast<BaseIt const&>(b);
+        BaseIt const ee = static_cast<BaseIt const&>(exh);
+        if (!any_step) {
+            reverse_iterator<BaseIt> const r(bb);
+            return base_t(r, r);
+        }
+        return base_t(reverse_iterator<BaseIt>(ee), reverse_iterator<BaseIt>(bb));
+    }
+
+public:
+    template <class Rng, class = std::void_t<decltype(std::declval<Rng>().begin())>>
+    explicit reversed_view(Rng const& src)
+        : base_t(make_bounds(src))
     {}
 };
 
@@ -187,6 +278,9 @@ public:
  * @brief Lazy filter: O(1) construction; `std::find_if` runs at most once on first `begin()` (cached).
  * @tparam BaseIt Underlying iterator.
  * @tparam P Predicate type (stored in iterators).
+ * @details The first-match cache uses `detail::lazy_copy_once<BaseIt>`: no heap allocation and no requirement
+ *          that `BaseIt` be default-constructible (unlike `std::optional<BaseIt>` with some `reverse_iterator`
+ *          specializations on libstdc++).
  */
 template <class BaseIt, class P>
 class where_view : public detail::query_range_algorithms<where_view<BaseIt, P>, where_iterator<BaseIt, P>> {
@@ -200,7 +294,7 @@ private:
     BaseIt b_{};
     BaseIt e_{};
     P pred_{};
-    mutable std::optional<BaseIt> first_{};
+    mutable detail::lazy_copy_once<BaseIt> first_{};
 
 public:
     /** @name Construction (where_view) */
@@ -219,9 +313,8 @@ public:
     /** @brief First element matching `pred_` or `e_`; runs `find_if` at most once (cached). */
     [[nodiscard]] iterator begin() const
     {
-        if (!first_.has_value())
-            first_.emplace(std::find_if(b_, e_, pred_));
-        return iterator(first_.value(), b_, e_, pred_);
+        BaseIt const& first_it = first_.cref_or_emplace([&] { return std::find_if(b_, e_, pred_); });
+        return iterator(first_it, b_, e_, pred_);
     }
 
     /** @brief Physical end; do not dereference. */
@@ -427,11 +520,11 @@ public:
         return owner_->at(key);
     }
 
-    /** @brief `std::reverse_iterator` view over the same stored `[begin,end)` span. */
-    [[nodiscard]] materialized_range<std::reverse_iterator<Iter>, Owner> reverse() const
+    /** @brief `reverse_iterator` view over the same stored `[begin,end)` span. */
+    [[nodiscard]] materialized_range<reverse_iterator<Iter>, Owner> reverse() const
     {
-        return materialized_range<std::reverse_iterator<Iter>, Owner>(
-            std::reverse_iterator<Iter>(this->end_), std::reverse_iterator<Iter>(this->begin_), owner_);
+        return materialized_range<reverse_iterator<Iter>, Owner>(
+            reverse_iterator<Iter>(this->end_), reverse_iterator<Iter>(this->begin_), owner_);
     }
     /** @} */
 

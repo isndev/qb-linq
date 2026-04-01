@@ -32,6 +32,8 @@ Use this skill for work **inside the qb-linq repository**: changing pipelines, i
 
 - Do not break **`materialized_range`** safe construction documented in **`query.h`**.
 - **`select_many`** yields a **tuple** of projections per element, not a flattened sequence (not C# `SelectMany`).
+- **`scan_iterator`** must not outlive **`scan_view`** (`F*` into the view).
+- **`reverse()`** + **`take` / `take_while`:** use the dedicated **`reversed_view`** specializations in **`query.h`**; new logical-end iterators must not break **`reverse_iterator`** equality or bounds.
 
 ## Output expectations
 

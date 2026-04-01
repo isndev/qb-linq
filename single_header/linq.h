@@ -4,7 +4,7 @@
  *
  * @note Do not edit by hand. Regenerate with:
  * `python scripts/amalgamate_single_header.py` or `pwsh -File scripts/amalgamate_single_header.ps1` or CMake target **qb_linq_single_header**.
- * @note Embedded version **1.2.0** from `CMakeLists.txt` `project(VERSION ...)`.
+ * @note Embedded version **1.2.1** from `CMakeLists.txt` `project(VERSION ...)`.
  */
 
 #pragma once
@@ -18,6 +18,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <new>
 #include <optional>
 #include <set>
 #include <stdexcept>
@@ -43,10 +44,10 @@
 #define QB_LINQ_VERSION_MINOR 2
 
 /** @brief Patch version. */
-#define QB_LINQ_VERSION_PATCH 0
+#define QB_LINQ_VERSION_PATCH 1
 
-/** @brief Version string, e.g. `"1.2.0"`. */
-#define QB_LINQ_VERSION_STRING "1.2.0"
+/** @brief Version string, e.g. `"1.2.1"`. */
+#define QB_LINQ_VERSION_STRING "1.2.1"
 
 /**
  * @brief Integer for preprocessor comparison: `major*1'000'000 + minor*1'000 + patch` (minor/patch &lt; 1000).
@@ -495,6 +496,114 @@ using group_by_map_t = typename group_by_impl<In, Funcs...>::type;
 
 } // namespace qb::linq::detail
 
+// ---- qb/linq/detail/lazy_copy_once.h ----
+
+/**
+ * @file lazy_copy_once.h
+ * @ingroup linq
+ * @brief Holds a `T` at most once, lazily initialized, without requiring `T` to be default-constructible.
+ *
+ * @details
+ * Used by `where_view` to cache `std::find_if`’s result. `std::optional<T>` is ill-suited when `T` is not
+ * default-constructible when paired with some standard reverse adaptors. This type keeps an
+ * **empty** state with **no** `T` object until `cref_or_emplace` runs, then copies/moves `T` on copy/move of
+ * the holder. **No heap allocation.**
+ */
+
+
+namespace qb::linq::detail {
+
+/**
+ * @ingroup linq
+ * @brief Lazy-initialized value; supports copy/move; `const` initialization from a nullary invocable.
+ */
+template <class T>
+class lazy_copy_once {
+    static_assert(!std::is_reference_v<T>, "lazy_copy_once<T>: T must not be a reference");
+    static_assert(!std::is_const_v<T>, "lazy_copy_once<T>: T must not be const-qualified");
+
+    alignas(T) mutable unsigned char buf_[sizeof(T)]{};
+    mutable bool engaged_{false};
+
+    T* ptr() noexcept { return std::launder(reinterpret_cast<T*>(buf_)); }
+    T const* ptr() const noexcept { return std::launder(reinterpret_cast<T const*>(buf_)); }
+
+    void destroy() noexcept
+    {
+        if (engaged_) {
+            ptr()->~T();
+            engaged_ = false;
+        }
+    }
+
+public:
+    lazy_copy_once() noexcept = default;
+
+    lazy_copy_once(lazy_copy_once const& other) noexcept(std::is_nothrow_copy_constructible_v<T>)
+        : engaged_(false)
+    {
+        if (other.engaged_) {
+            new (buf_) T(*other.ptr());
+            engaged_ = true;
+        }
+    }
+
+    lazy_copy_once(lazy_copy_once&& other) noexcept(std::is_nothrow_move_constructible_v<T>)
+        : engaged_(false)
+    {
+        if (other.engaged_) {
+            new (buf_) T(std::move(*other.ptr()));
+            engaged_ = true;
+            other.destroy();
+        }
+    }
+
+    lazy_copy_once& operator=(lazy_copy_once const& other) noexcept(
+        std::is_nothrow_copy_constructible_v<T> && std::is_nothrow_destructible_v<T>)
+    {
+        if (this == &other)
+            return *this;
+        destroy();
+        if (other.engaged_) {
+            new (buf_) T(*other.ptr());
+            engaged_ = true;
+        }
+        return *this;
+    }
+
+    lazy_copy_once& operator=(lazy_copy_once&& other) noexcept(
+        std::is_nothrow_move_constructible_v<T> && std::is_nothrow_destructible_v<T>)
+    {
+        if (this == &other)
+            return *this;
+        destroy();
+        if (other.engaged_) {
+            new (buf_) T(std::move(*other.ptr()));
+            engaged_ = true;
+            other.destroy();
+        }
+        return *this;
+    }
+
+    ~lazy_copy_once() { destroy(); }
+
+    /**
+     * @brief If empty, constructs `T` from `f()`; returns const reference to the stored `T`.
+     * @param f Nullary callable returning `T` (typically a lambda that runs `find_if`).
+     */
+    template <class F>
+    [[nodiscard]] T const& cref_or_emplace(F&& f) const
+    {
+        if (!engaged_) {
+            new (buf_) T(std::forward<F>(f)());
+            engaged_ = true;
+        }
+        return *ptr();
+    }
+};
+
+} // namespace qb::linq::detail
+
 // ---- qb/linq/detail/query_range.h ----
 
 /**
@@ -505,7 +614,7 @@ using group_by_map_t = typename group_by_impl<In, Funcs...>::type;
  * @details
  * **CRTP:** `Derived` must expose `begin()` and `end()` returning `Iter`. All algorithms forward to
  * `derived().begin()` / `derived().end()` so `where_view` remains cheap to construct (`find_if` runs only on
- * the first `begin()`, result cached in the view).
+ * the first `begin()`, first matching iterator cached in the view — see `where_view` in `query.h`).
  *
  * @par Materialization helpers
  * `reserve_if_random_access(c, b, e)` calls `c.reserve(e - b)` only when `[b,e)` is random-access, avoiding an
@@ -868,7 +977,8 @@ public:
 
     /**
      * @brief Running fold: yields `f(acc, x)` after each element `x`, starting from `seed`.
-     * @details Empty source → empty scan. Implementation stores `F` in a `shared_ptr` (`extra_views.h`).
+     * @details Empty source → empty scan. `F` is stored in the returned `scan_view`; iterators hold a non-owning
+     *          pointer and must not outlive that view (`extra_views.h`).
      */
     template <class Acc, class F>
     [[nodiscard]] scan_view<iterator, std::decay_t<Acc>, std::decay_t<F>> scan(Acc&& seed, F&& f) const;
@@ -1633,9 +1743,21 @@ public:
  * | `where_iterator` | Skip-until-predicate (`Where`) |
  * | `take_while_iterator` | Prefix while predicate (`TakeWhile`) |
  * | `take_n_iterator` | Prefix of length N (`Take`) |
+ * | `detail::compressed_fn<F>` | Empty-base storage for `F` in `select` / `where` / `take_while` iterators when `F` is an empty class |
+ *
+ * @par MSVC note
+ * Iterator adaptors and `compressed_fn<F,true>` use `__declspec(empty_bases)` so an empty `F` participates in
+ * EBO under multiple inheritance (otherwise `sizeof` can be `sizeof(BaseIt)` plus a full padding slot).
  */
 
 
+
+/** MSVC: enable empty-base optimization across multiple inheritance (otherwise `sizeof` can double). */
+#if defined(_MSC_VER)
+#define QB_LINQ_ITER_EMPTY_BASES __declspec(empty_bases)
+#else
+#define QB_LINQ_ITER_EMPTY_BASES
+#endif
 
 namespace qb::linq {
 
@@ -1650,6 +1772,32 @@ template <class Cat>
 using clamp_iterator_category_t =
     std::conditional_t<std::is_base_of_v<std::random_access_iterator_tag, Cat>,
         std::bidirectional_iterator_tag, Cat>;
+
+/**
+ * @brief Stores `F` with empty-base optimization when `F` is an empty class type (C++17).
+ */
+template <class F, bool Ebo = std::is_class_v<F>&& std::is_empty_v<F>&& !std::is_final_v<F>>
+struct compressed_fn;
+
+template <class F>
+struct QB_LINQ_ITER_EMPTY_BASES compressed_fn<F, true> : private F {
+    explicit compressed_fn(F fn) noexcept(std::is_nothrow_move_constructible_v<F>)
+        : F(std::move(fn))
+    {}
+    F& fn() noexcept { return static_cast<F&>(*this); }
+    F const& fn() const noexcept { return static_cast<F const&>(*this); }
+};
+
+template <class F>
+struct compressed_fn<F, false> {
+    F fn_;
+
+    explicit compressed_fn(F fn) noexcept(std::is_nothrow_move_constructible_v<F>)
+        : fn_(std::move(fn))
+    {}
+    F& fn() noexcept { return fn_; }
+    F const& fn() const noexcept { return fn_; }
+};
 
 } // namespace detail
 
@@ -1723,7 +1871,9 @@ public:
  * @tparam F Callable `reference -> R` (reference type may preserve `R` as lvalue/rvalue ref).
  */
 template <class BaseIt, class F>
-class select_iterator : public BaseIt {
+class QB_LINQ_ITER_EMPTY_BASES select_iterator : public BaseIt, private detail::compressed_fn<F> {
+    using fn_holder = detail::compressed_fn<F>;
+
 public:
     using iterator_category = typename std::iterator_traits<BaseIt>::iterator_category;
     using projected_t =
@@ -1745,7 +1895,7 @@ public:
      */
     select_iterator(BaseIt base, F fn) noexcept(
         std::is_nothrow_move_constructible_v<BaseIt>&& std::is_nothrow_move_constructible_v<F>)
-        : BaseIt(std::move(base)), fn_(std::move(fn))
+        : BaseIt(std::move(base)), fn_holder(std::move(fn))
     {}
 
     /**
@@ -1799,18 +1949,15 @@ public:
     [[nodiscard]] reference operator*() const
         noexcept(noexcept(std::declval<F const&>()(*std::declval<BaseIt const&>())))
     {
-        return fn_(*static_cast<BaseIt const&>(*this));
+        return static_cast<fn_holder const&>(*this).fn()(*static_cast<BaseIt const&>(*this));
     }
 
     /** @brief Projected value from `fn(*base)` (mutable path). */
     [[nodiscard]] reference operator*() noexcept(noexcept(std::declval<F const&>()(*std::declval<BaseIt&>())))
     {
-        return fn_(*static_cast<BaseIt&>(*this));
+        return static_cast<fn_holder&>(*this).fn()(*static_cast<BaseIt&>(*this));
     }
     /** @} */
-
-private:
-    F fn_;
 };
 
 /**
@@ -1821,7 +1968,9 @@ private:
  * @note Iterator category is at most bidirectional even if `BaseIt` is random-access.
  */
 template <class BaseIt, class Pred>
-class where_iterator : public BaseIt {
+class QB_LINQ_ITER_EMPTY_BASES where_iterator : public BaseIt, private detail::compressed_fn<Pred> {
+    using pred_holder = detail::compressed_fn<Pred>;
+
 public:
     using iterator_category = detail::clamp_iterator_category_t<
         typename std::iterator_traits<BaseIt>::iterator_category>;
@@ -1844,9 +1993,9 @@ public:
      */
     where_iterator(BaseIt current, BaseIt begin, BaseIt end, Pred pred)
         : BaseIt(std::move(current))
+        , pred_holder(std::move(pred))
         , begin_(std::move(begin))
         , end_(std::move(end))
-        , pred_(std::move(pred))
     {}
 
     /**
@@ -1867,9 +2016,10 @@ public:
     /** @brief Advance to next element satisfying `pred`; stop at `end_`. */
     where_iterator& operator++()
     {
+        Pred const& pr = static_cast<pred_holder const&>(*this).fn();
         do {
             ++static_cast<BaseIt&>(*this);
-        } while (static_cast<BaseIt const&>(*this) != end_ && !pred_(*static_cast<BaseIt const&>(*this)));
+        } while (static_cast<BaseIt const&>(*this) != end_ && !pr(*static_cast<BaseIt const&>(*this)));
         return *this;
     }
 
@@ -1885,15 +2035,16 @@ public:
     where_iterator& operator--()
     {
         BaseIt& cur = static_cast<BaseIt&>(*this);
+        Pred const& pr = static_cast<pred_holder const&>(*this).fn();
 
         // Logical end sits at underlying \p end_; do not dereference there.
         if (cur == end_) {
             if (begin_ == end_)
                 return *this;
             --cur;
-            while (cur != begin_ && !pred_(*cur))
+            while (cur != begin_ && !pr(*cur))
                 --cur;
-            if (!pred_(*cur))
+            if (!pr(*cur))
                 cur = end_;
             return *this;
         }
@@ -1905,9 +2056,9 @@ public:
         }
 
         --cur;
-        while (cur != begin_ && !pred_(*cur))
+        while (cur != begin_ && !pr(*cur))
             --cur;
-        if (!pred_(*cur))
+        if (!pr(*cur))
             cur = end_;
         return *this;
     }
@@ -1924,7 +2075,6 @@ public:
 private:
     BaseIt begin_;
     BaseIt end_;
-    Pred pred_;
 };
 
 /**
@@ -1934,7 +2084,9 @@ private:
  * @tparam Pred Predicate; must not be invoked on the end iterator of the peer range in `operator==`.
  */
 template <class BaseIt, class Pred>
-class take_while_iterator : public BaseIt {
+class QB_LINQ_ITER_EMPTY_BASES take_while_iterator : public BaseIt, private detail::compressed_fn<Pred> {
+    using pred_holder = detail::compressed_fn<Pred>;
+
 public:
     using iterator_category = detail::clamp_iterator_category_t<
         typename std::iterator_traits<BaseIt>::iterator_category>;
@@ -1953,7 +2105,7 @@ public:
      */
     take_while_iterator(BaseIt base, Pred pred) noexcept(
         std::is_nothrow_move_constructible_v<BaseIt>&& std::is_nothrow_move_constructible_v<Pred>)
-        : BaseIt(std::move(base)), pred_(std::move(pred))
+        : BaseIt(std::move(base)), pred_holder(std::move(pred))
     {}
     /** @} */
 
@@ -2002,7 +2154,7 @@ public:
         BaseIt const& R = static_cast<BaseIt const&>(rhs);
         if (L == R)
             return true;
-        if (!pred_(*L))
+        if (!static_cast<pred_holder const&>(*this).fn()(*L))
             return true;
         return false;
     }
@@ -2010,9 +2162,6 @@ public:
     /** @brief Negation of `operator==`. */
     [[nodiscard]] bool operator!=(take_while_iterator const& rhs) const { return !(*this == rhs); }
     /** @} */
-
-private:
-    Pred pred_;
 };
 
 /**
@@ -2020,7 +2169,8 @@ private:
  * @brief Takes at most `N` elements from the base range (`Take`); `remaining` pairs with end sentinel.
  * @tparam BaseIt Source iterator.
  * @details `remaining_` counts consumed elements; end iterator uses `remaining == 0`. Negative `take` counts
- *          are normalized in the view (`take_n_view`), not here.
+ *          are normalized in the view (`take_n_view`), not here. After the final yield, `operator++` reaches
+ *          `remaining_ == 0` **without** advancing the base iterator again, so filtered tails are not traversed.
  */
 template <class BaseIt>
 class take_n_iterator : public BaseIt {
@@ -2051,11 +2201,17 @@ public:
 
     /** @name Traversal */
     /** @{ */
-    /** @brief Consume one element: increment `remaining_` and advance base. */
+    /**
+     * @brief Step toward logical end: bump `remaining_` toward `0`; advance base only while more yields remain.
+     * @details When `remaining_` reaches `0`, the base position is **not** advanced further — the logical range is
+     *          exhausted (`operator==` matches `end` via `remaining_`). That avoids walking the rest of a filtered
+     *          underlying sequence (e.g. `where` predicates) after the last taken element.
+     */
     take_n_iterator& operator++() noexcept(noexcept(++std::declval<BaseIt&>()))
     {
         ++remaining_;
-        ++static_cast<BaseIt&>(*this);
+        if (remaining_ < 0)
+            ++static_cast<BaseIt&>(*this);
         return *this;
     }
 
@@ -2105,6 +2261,8 @@ private:
 
 } // namespace qb::linq
 
+#undef QB_LINQ_ITER_EMPTY_BASES
+
 /**
  * @brief Ensure `std::iterator_traits` reports the clamped category for adaptors that inherit a random-access
  *        base (`operator-` still exists on the base subobject; libstdc++/MSVC must not treat them as random-access).
@@ -2143,6 +2301,178 @@ struct iterator_traits<::qb::linq::take_n_iterator<BaseIt>> {
 
 } // namespace std
 
+// ---- qb/linq/reverse_iterator.h ----
+
+/**
+ * @file reverse_iterator.h
+ * @ingroup linq
+ * @brief `qb::linq::reverse_iterator` — same behavior as `std::reverse_iterator` without requiring a
+ *        default-constructible base iterator.
+ *
+ * @details
+ * Stores an explicit base position `current` (same convention as `std::reverse_iterator::base()`).
+ * There is **no default constructor**. Random-access operations (`+=`, `+`, `-`, `[]`, iterator difference)
+ * are available only when the base iterator is random-access.
+ */
+
+
+namespace qb::linq {
+
+template <class Iterator>
+class reverse_iterator {
+    static_assert(std::is_base_of_v<std::bidirectional_iterator_tag,
+                      typename std::iterator_traits<Iterator>::iterator_category>,
+        "qb::linq::reverse_iterator requires a bidirectional (or stronger) base iterator");
+
+    template <class U>
+    using enable_if_ra_base = std::enable_if_t<std::is_base_of_v<std::random_access_iterator_tag,
+        typename std::iterator_traits<U>::iterator_category>>;
+
+    Iterator current_;
+
+public:
+    using iterator_type = Iterator;
+    using iterator_category = typename std::iterator_traits<Iterator>::iterator_category;
+    using value_type = typename std::iterator_traits<Iterator>::value_type;
+    using difference_type = typename std::iterator_traits<Iterator>::difference_type;
+    using pointer = typename std::iterator_traits<Iterator>::pointer;
+    using reference = typename std::iterator_traits<Iterator>::reference;
+
+    reverse_iterator() = delete;
+
+    explicit reverse_iterator(Iterator x) noexcept(std::is_nothrow_move_constructible_v<Iterator>)
+        : current_(std::move(x))
+    {}
+
+    reverse_iterator(reverse_iterator const&) = default;
+    reverse_iterator(reverse_iterator&&) noexcept(std::is_nothrow_move_constructible_v<Iterator>) = default;
+    reverse_iterator& operator=(reverse_iterator const&) = default;
+    reverse_iterator& operator=(reverse_iterator&&) noexcept(
+        std::is_nothrow_move_assignable_v<Iterator>) = default;
+
+    [[nodiscard]] Iterator const& base() const noexcept { return current_; }
+
+    [[nodiscard]] reference operator*() const
+    {
+        Iterator tmp = current_;
+        return *--tmp;
+    }
+
+    [[nodiscard]] pointer operator->() const
+    {
+        Iterator tmp = current_;
+        --tmp;
+        return std::addressof(*tmp);
+    }
+
+    reverse_iterator& operator++() noexcept(noexcept(--std::declval<Iterator&>()))
+    {
+        --current_;
+        return *this;
+    }
+
+    reverse_iterator operator++(int)
+    {
+        reverse_iterator tmp(*this);
+        --current_;
+        return tmp;
+    }
+
+    reverse_iterator& operator--() noexcept(noexcept(++std::declval<Iterator&>()))
+    {
+        ++current_;
+        return *this;
+    }
+
+    reverse_iterator operator--(int)
+    {
+        reverse_iterator tmp(*this);
+        ++current_;
+        return tmp;
+    }
+
+    [[nodiscard]] friend bool operator==(reverse_iterator const& a, reverse_iterator const& b) noexcept(
+        noexcept(a.current_ == b.current_))
+    {
+        return a.current_ == b.current_;
+    }
+
+    [[nodiscard]] friend bool operator!=(reverse_iterator const& a, reverse_iterator const& b) noexcept(
+        noexcept(a.current_ != b.current_))
+    {
+        return a.current_ != b.current_;
+    }
+
+    template <typename BaseIt = Iterator, typename = enable_if_ra_base<BaseIt>>
+    reverse_iterator& operator+=(difference_type n) noexcept(noexcept(current_ -= n))
+    {
+        current_ -= n;
+        return *this;
+    }
+
+    template <typename BaseIt = Iterator, typename = enable_if_ra_base<BaseIt>>
+    [[nodiscard]] reverse_iterator operator+(difference_type n) const
+        noexcept(noexcept(Iterator(std::declval<Iterator const&>() - n)))
+    {
+        return reverse_iterator(current_ - n);
+    }
+
+    template <typename BaseIt = Iterator, typename = enable_if_ra_base<BaseIt>>
+    reverse_iterator& operator-=(difference_type n) noexcept(noexcept(current_ += n))
+    {
+        current_ += n;
+        return *this;
+    }
+
+    template <typename BaseIt = Iterator, typename = enable_if_ra_base<BaseIt>>
+    [[nodiscard]] reverse_iterator operator-(difference_type n) const
+        noexcept(noexcept(Iterator(std::declval<Iterator const&>() + n)))
+    {
+        return reverse_iterator(current_ + n);
+    }
+
+    template <typename BaseIt = Iterator, typename = enable_if_ra_base<BaseIt>>
+    [[nodiscard]] reference operator[](difference_type n) const
+    {
+        return *(*this + n);
+    }
+};
+
+template <class Iterator>
+std::enable_if_t<std::is_base_of_v<std::random_access_iterator_tag,
+                      typename std::iterator_traits<Iterator>::iterator_category>,
+    reverse_iterator<Iterator>>
+operator+(typename reverse_iterator<Iterator>::difference_type n, reverse_iterator<Iterator> const& x) noexcept(
+    noexcept(x + n))
+{
+    return x + n;
+}
+
+template <class Iterator>
+std::enable_if_t<std::is_base_of_v<std::random_access_iterator_tag,
+                      typename std::iterator_traits<Iterator>::iterator_category>,
+    typename reverse_iterator<Iterator>::difference_type>
+operator-(reverse_iterator<Iterator> const& lhs, reverse_iterator<Iterator> const& rhs) noexcept(
+    noexcept(rhs.base() - lhs.base()))
+{
+    return rhs.base() - lhs.base();
+}
+
+} // namespace qb::linq
+
+namespace std {
+
+template <class Iterator>
+struct iterator_traits<::qb::linq::reverse_iterator<Iterator>> {
+    using iterator_category = typename ::qb::linq::reverse_iterator<Iterator>::iterator_category;
+    using value_type = typename ::qb::linq::reverse_iterator<Iterator>::value_type;
+    using difference_type = typename ::qb::linq::reverse_iterator<Iterator>::difference_type;
+    using pointer = typename ::qb::linq::reverse_iterator<Iterator>::pointer;
+    using reference = typename ::qb::linq::reverse_iterator<Iterator>::reference;
+};
+
+} // namespace std
+
 // ---- qb/linq/detail/extra_views.h ----
 
 /**
@@ -2165,7 +2495,8 @@ struct iterator_traits<::qb::linq::take_n_iterator<BaseIt>> {
  * - **enumerate_view:** `(index, element)` pairs; index starts at 0.
  * - **chunk_view:** each `operator*` copies up to `n` elements into an internal `std::vector` (lazy per chunk).
  * - **stride_view:** step clamped to at least 1.
- * - **scan_view:** yields running `f(acc, x)`; empty source → no values; `F` stored in `shared_ptr`.
+ * - **scan_view:** yields running `f(acc, x)`; empty source → no values; `F` stored in the view; iterators hold a
+ *   non-owning `F*` (no refcount); iterators must not outlive the `scan_view` they came from.
  *
  * @par Types in this header
  * | Iterator / view | Role |
@@ -2402,6 +2733,8 @@ public:
  * @brief Forward iterator over `[a_begin,a_end)` then `[b_begin,b_end)`.
  * @tparam It1 First range iterator.
  * @tparam It2 Second range iterator; `value_type` must match `It1` (after removing cv).
+ * @details `reference` is the conditional-operator common type of `*It1` and `*It2` so mixed `T&` / `T const&`
+ *          legs (e.g. `union_with` on a `const` right-hand range) remain valid.
  */
 template <class It1, class It2>
 class concat_iterator {
@@ -2418,7 +2751,8 @@ public:
     using value_type = typename std::iterator_traits<It1>::value_type;
     using difference_type = std::ptrdiff_t;
     using pointer = void;
-    using reference = typename std::iterator_traits<It1>::reference;
+    /** @brief Common reference of both legs (`int&` + `const int&` → `const int&`); not only `It1::reference`. */
+    using reference = decltype(false ? *std::declval<It1&>() : *std::declval<It2&>());
 
     /** @brief Default; for end-sentinel construction use `is_end == true`. */
     concat_iterator() = default;
@@ -3194,15 +3528,16 @@ struct scan_acc_cache<Acc, true> {
 
 /**
  * @ingroup linq
- * @brief Caches the next accumulator value; `F` shared with other iterators via `shared_ptr`.
- * @details End iterator holds `cur == end` and null `f_`.
+ * @brief Caches the next accumulator value; `fn` points at the owning view’s `F` (null at end / inactive).
+ * @details End iterator holds `cur == end` and null `fn_`. Callers must not dereference iterators past the
+ *          lifetime of the `scan_view` that supplied `fn_`.
  */
 template <class BaseIt, class Acc, class F>
 class scan_iterator {
     BaseIt cur_{};
     BaseIt end_{};
     Acc acc_{};
-    std::shared_ptr<F> f_{};
+    F* fn_{};
     mutable scan_acc_cache<Acc> cache_{};
 
 public:
@@ -3224,38 +3559,38 @@ public:
      * @param b Source begin.
      * @param e Source end.
      * @param seed Initial accumulator (before first element).
-     * @param fn Binary op `Acc f(Acc, element)`; shared across iterators.
+     * @param fn Address of the fold function in the parent `scan_view`, or null.
      */
-    scan_iterator(BaseIt b, BaseIt e, Acc seed, std::shared_ptr<F> fn)
-        : cur_(std::move(b)), end_(std::move(e)), acc_(std::move(seed)), f_(std::move(fn))
+    scan_iterator(BaseIt b, BaseIt e, Acc seed, F* fn)
+        : cur_(std::move(b)), end_(std::move(e)), acc_(std::move(seed)), fn_(fn)
     {
         if (cur_ == end_)
-            f_.reset();
+            fn_ = nullptr;
     }
 
     /** @brief Next accumulated value (lazy; cached on first read per position). */
     [[nodiscard]] reference operator*() const
     {
-        if (!f_)
+        if (!fn_)
             throw std::out_of_range("qb::linq::scan_iterator::operator*");
         if (!cache_.has())
-            cache_.assign((*f_)(acc_, *cur_));
+            cache_.assign((*fn_)(acc_, *cur_));
         return cache_.ref();
     }
 
     /** @brief Advance: commit accumulator, clear cache, step base. */
     scan_iterator& operator++()
     {
-        if (!f_)
+        if (!fn_)
             return *this;
         if (cache_.has())
             acc_ = std::move(cache_.ref());
         else
-            acc_ = (*f_)(acc_, *cur_);
+            acc_ = (*fn_)(acc_, *cur_);
         cache_.clear();
         ++cur_;
         if (cur_ == end_)
-            f_.reset();
+            fn_ = nullptr;
         return *this;
     }
 
@@ -3270,7 +3605,7 @@ public:
     /** @brief Equality on position and active fold state. */
     [[nodiscard]] friend bool operator==(scan_iterator const& a, scan_iterator const& b) noexcept
     {
-        return a.cur_ == b.cur_ && static_cast<bool>(a.f_) == static_cast<bool>(b.f_);
+        return a.cur_ == b.cur_ && static_cast<bool>(a.fn_) == static_cast<bool>(b.fn_);
     }
     [[nodiscard]] friend bool operator!=(scan_iterator const& a, scan_iterator const& b) noexcept
     {
@@ -3286,23 +3621,26 @@ template <class BaseIt, class Acc, class F>
 class scan_view : public query_range_algorithms<scan_view<BaseIt, Acc, F>, scan_iterator<BaseIt, Acc, F>> {
     BaseIt b_{}, e_{};
     Acc seed_{};
-    std::shared_ptr<F> f_{};
+    /** @brief `mutable` so `begin() const` can expose `F*` for non-const callables under the same rules as
+     *         `shared_ptr<F>::get()` in a const member function. */
+    mutable F fn_{};
 
 public:
     /**
      * @param b Source begin.
      * @param e Source end.
      * @param s Seed accumulator.
-     * @param fn Fold function (stored in `shared_ptr`).
+     * @param fn Fold function (stored in the view).
      */
     scan_view(BaseIt b, BaseIt e, Acc s, F fn)
-        : b_(std::move(b)), e_(std::move(e)), seed_(std::move(s)), f_(std::make_shared<F>(std::move(fn)))
+        : b_(std::move(b)), e_(std::move(e)), seed_(std::move(s)), fn_(std::move(fn))
     {}
 
-    /** @brief Iterator at `b` with seed and shared `F`. */
+    /** @brief Iterator at `b` with seed; points at this view’s `fn_` (null when `[b,e)` empty). */
     [[nodiscard]] scan_iterator<BaseIt, Acc, F> begin() const
     {
-        return scan_iterator<BaseIt, Acc, F>(b_, e_, seed_, f_);
+        F* p = (b_ == e_) ? nullptr : std::addressof(fn_);
+        return scan_iterator<BaseIt, Acc, F>(b_, e_, seed_, p);
     }
     /** @brief End (no yields when `[b,e)` empty). */
     [[nodiscard]] scan_iterator<BaseIt, Acc, F> end() const
@@ -3325,7 +3663,7 @@ query_range_algorithms<Derived, Iter>::enumerate() const
     return enumerate_view<iterator_t>(derived().begin(), derived().end());
 }
 
-/** @brief Out-of-line `scan`: prefix fold with `shared_ptr` to `F`. */
+/** @brief Out-of-line `scan`: prefix fold; `F` lives in the returned `scan_view`. */
 template <class Derived, class Iter>
 template <class Acc, class F>
 scan_view<Iter, std::decay_t<Acc>, std::decay_t<F>> query_range_algorithms<Derived, Iter>::scan(
@@ -3447,14 +3785,14 @@ auto query_range_algorithms<Derived, Iter>::prepend(T&& v) const
  * this header directly.
  *
  * @par Dependency order
- * `query_range.h` (declarations) → `iterators.h` → `extra_views.h` (definitions) → template bodies below for
+ * `query_range.h` (declarations) → `iterators.h` → `reverse_iterator.h` → `extra_views.h` (definitions) → template bodies below for
  * `group_by`, `order_by`, `to_*`, `join`, set ops (require complete `materialized_range`).
  *
  * @par Types in this header
  * | Type | Role |
  * |------|------|
  * | `query_state` | Minimal `[begin,end)` + CRTP algorithms |
- * | `reversed_view` | `std::reverse_iterator` adapter |
+ * | `reversed_view` | `qb::linq::reverse_iterator` adapter (no default ctor on adaptor) |
  * | `subrange` | Slice after `skip` / `skip_while` |
  * | `from_range` | `basic_iterator` wrapper for raw iterators |
  * | `select_view` / `where_view` / `take_n_view` / `take_while_view` | Lazy views |
@@ -3530,12 +3868,12 @@ public:
 
 /**
  * @ingroup linq
- * @brief Reverse iteration over `[src.begin(), src.end())` using `std::reverse_iterator`.
- * @tparam Iter Underlying iterator type from the adapted range.
+ * @brief Reverse iteration over `[src.begin(), src.end())` using `qb::linq::reverse_iterator`.
+ * @tparam Iter Underlying iterator type from the adapted range (at least bidirectional).
  */
 template <class Iter>
-class reversed_view : public query_state<std::reverse_iterator<Iter>> {
-    using base_t = query_state<std::reverse_iterator<Iter>>;
+class reversed_view : public query_state<reverse_iterator<Iter>> {
+    using base_t = query_state<reverse_iterator<Iter>>;
 
 public:
     /**
@@ -3545,7 +3883,97 @@ public:
      */
     template <class Rng, class = std::void_t<decltype(std::declval<Rng>().begin())>>
     explicit reversed_view(Rng const& src)
-        : base_t(std::reverse_iterator<Iter>(src.end()), std::reverse_iterator<Iter>(src.begin()))
+        : base_t(reverse_iterator<Iter>(src.end()), reverse_iterator<Iter>(src.begin()))
+    {}
+};
+
+/**
+ * @ingroup linq
+ * @brief `take_n_iterator` uses `(physical_end, 0)` as a logical end sentinel (`operator==` matches any `(base, 0)`).
+ *        Generic `reversed_view` would wrap that physical end and walk the whole underlying range; scan once to the
+ *        exhausted position. An exhausted iterator still sits **on** the last element (`remaining_ == 0`); `reverse_iterator`
+ *        needs a position one **past** that element on the underlying base, so only `BaseIt` is bumped (`remaining_`
+ *        unchanged).
+ */
+template <class BaseIt>
+class reversed_view<take_n_iterator<BaseIt>> : public query_state<reverse_iterator<take_n_iterator<BaseIt>>> {
+    using It = take_n_iterator<BaseIt>;
+    using base_t = query_state<reverse_iterator<It>>;
+
+    static It scan_logical_end(It b, It const& sen)
+    {
+        It cur = std::move(b);
+        while (cur != sen)
+            ++cur;
+        return cur;
+    }
+
+    static It bump_base_past_last(It exh)
+    {
+        It r = std::move(exh);
+        ++static_cast<BaseIt&>(r);
+        return r;
+    }
+
+    template <class Rng>
+    static base_t make_bounds(Rng const& src)
+    {
+        It b = src.begin();
+        It const sen = src.end();
+        It exh = scan_logical_end(It(b), sen);
+        if (b == exh) {
+            reverse_iterator<It> const r(b);
+            return base_t(r, r);
+        }
+        if (static_cast<BaseIt const&>(exh) == static_cast<BaseIt const&>(sen))
+            return base_t(reverse_iterator<It>(std::move(exh)), reverse_iterator<It>(std::move(b)));
+        return base_t(reverse_iterator<It>(bump_base_past_last(std::move(exh))), reverse_iterator<It>(std::move(b)));
+    }
+
+public:
+    template <class Rng, class = std::void_t<decltype(std::declval<Rng>().begin())>>
+    explicit reversed_view(Rng const& src)
+        : base_t(make_bounds(src))
+    {}
+};
+
+/**
+ * @ingroup linq
+ * @brief After a forward scan, the logical end iterator sits on the **first failing** element; its underlying base is a
+ *        valid half-open end for the accepted prefix (unlike `take_n_iterator`, which stops **on** the last taken
+ *        element). Reverse using `reverse_iterator<BaseIt>` only: nesting `take_while_iterator` inside `reverse_iterator`
+ *        breaks equality (asymmetric `operator==`; predicate on the left can equate unrelated positions).
+ */
+template <class BaseIt, class Pred>
+class reversed_view<take_while_iterator<BaseIt, Pred>> : public query_state<reverse_iterator<BaseIt>> {
+    using Tw = take_while_iterator<BaseIt, Pred>;
+    using base_t = query_state<reverse_iterator<BaseIt>>;
+
+    template <class Rng>
+    static base_t make_bounds(Rng const& src)
+    {
+        Tw b = src.begin();
+        Tw const sen = src.end();
+        Tw cur = b;
+        bool any_step = false;
+        while (cur != sen) {
+            any_step = true;
+            ++cur;
+        }
+        Tw exh = std::move(cur);
+        BaseIt const bb = static_cast<BaseIt const&>(b);
+        BaseIt const ee = static_cast<BaseIt const&>(exh);
+        if (!any_step) {
+            reverse_iterator<BaseIt> const r(bb);
+            return base_t(r, r);
+        }
+        return base_t(reverse_iterator<BaseIt>(ee), reverse_iterator<BaseIt>(bb));
+    }
+
+public:
+    template <class Rng, class = std::void_t<decltype(std::declval<Rng>().begin())>>
+    explicit reversed_view(Rng const& src)
+        : base_t(make_bounds(src))
     {}
 };
 
@@ -3606,6 +4034,9 @@ public:
  * @brief Lazy filter: O(1) construction; `std::find_if` runs at most once on first `begin()` (cached).
  * @tparam BaseIt Underlying iterator.
  * @tparam P Predicate type (stored in iterators).
+ * @details The first-match cache uses `detail::lazy_copy_once<BaseIt>`: no heap allocation and no requirement
+ *          that `BaseIt` be default-constructible (unlike `std::optional<BaseIt>` with some `reverse_iterator`
+ *          specializations on libstdc++).
  */
 template <class BaseIt, class P>
 class where_view : public detail::query_range_algorithms<where_view<BaseIt, P>, where_iterator<BaseIt, P>> {
@@ -3619,7 +4050,7 @@ private:
     BaseIt b_{};
     BaseIt e_{};
     P pred_{};
-    mutable std::optional<BaseIt> first_{};
+    mutable detail::lazy_copy_once<BaseIt> first_{};
 
 public:
     /** @name Construction (where_view) */
@@ -3638,9 +4069,8 @@ public:
     /** @brief First element matching `pred_` or `e_`; runs `find_if` at most once (cached). */
     [[nodiscard]] iterator begin() const
     {
-        if (!first_.has_value())
-            first_.emplace(std::find_if(b_, e_, pred_));
-        return iterator(first_.value(), b_, e_, pred_);
+        BaseIt const& first_it = first_.cref_or_emplace([&] { return std::find_if(b_, e_, pred_); });
+        return iterator(first_it, b_, e_, pred_);
     }
 
     /** @brief Physical end; do not dereference. */
@@ -3846,11 +4276,11 @@ public:
         return owner_->at(key);
     }
 
-    /** @brief `std::reverse_iterator` view over the same stored `[begin,end)` span. */
-    [[nodiscard]] materialized_range<std::reverse_iterator<Iter>, Owner> reverse() const
+    /** @brief `reverse_iterator` view over the same stored `[begin,end)` span. */
+    [[nodiscard]] materialized_range<reverse_iterator<Iter>, Owner> reverse() const
     {
-        return materialized_range<std::reverse_iterator<Iter>, Owner>(
-            std::reverse_iterator<Iter>(this->end_), std::reverse_iterator<Iter>(this->begin_), owner_);
+        return materialized_range<reverse_iterator<Iter>, Owner>(
+            reverse_iterator<Iter>(this->end_), reverse_iterator<Iter>(this->begin_), owner_);
     }
     /** @} */
 
@@ -4676,11 +5106,13 @@ public:
     /** @name Side effects */
     /** @{ */
     /**
-     * @brief Invokes `f` on each element, then returns a copy of this pipeline stage (safe for chaining).
-     * @details Does not consume into a new owning range; further operations re-walk the sequence.
+     * @brief Invokes `f` on each element (eager), then returns this pipeline stage for optional chaining.
+     * @details The underlying `query_range_algorithms::each` runs the full pass before this returns; mutating
+     *          `f` side effects apply even if you do not use the returned `enumerable`. The return value is
+     *          only needed to continue chaining (e.g. `each(...).where(...)`).
      */
     template <class F>
-    [[nodiscard]] enumerable each(F&& f) const&
+    enumerable each(F&& f) const&
     {
         static_cast<Handle const&>(*this).each(std::forward<F>(f));
         return enumerable(static_cast<Handle const&>(*this));
@@ -4688,7 +5120,7 @@ public:
 
     /** @brief Non-`const` `enumerable&` overload of `each`. */
     template <class F>
-    [[nodiscard]] enumerable each(F&& f) &
+    enumerable each(F&& f) &
     {
         static_cast<Handle const&>(*this).each(std::forward<F>(f));
         return enumerable(static_cast<Handle const&>(*this));
