@@ -53,7 +53,7 @@ qb/linq.h
               │     └─ qb/linq/detail/type_traits.h
               ├─ qb/linq/reverse_iterator.h
               └─ qb/linq/detail/extra_views.h
-                    (defines concat/zip/scan/chunk/stride/distinct/enumerate/default_if_empty/empty/single/repeat
+                    (defines concat/zip/zip3/scan/chunk/stride/distinct/enumerate/default_if_empty/empty/single/repeat
                      + out-of-line bodies for several `query_range_algorithms` methods)
 ```
 
@@ -102,16 +102,17 @@ qb/linq.h
 
 ### 5.1 Lazy transforms (return new views / `enumerable` via `select_view` etc.)
 
-- `select(F)`, `select_many(Fs...)` → tuple of loader results per element (**not** C# flattening).
-- `where(P)`, `of_type<U>()` (pointer + polymorphic + `dynamic_cast`).
+- `select(F)`, `select_indexed(F)` (`enumerate` + `select`), `select_many(Fs...)` → tuple of loader results per element (**not** C# flattening).
+- `where(P)`, `where_indexed(P)`, `of_type<U>()` (pointer + polymorphic + `dynamic_cast`).
 - `skip`, `skip_while`, `take`, `take_while`, `reverse`.
-- `concat(Rng)`, `zip(Rng)`, `zip_fold(Rng, init, f)` (**single pass**, no `zip_iterator` pairs).
+- `concat(Rng)`, `zip(Rng)`, `zip(R2,R3)` → `zip3_view`, `zip_fold(Rng, init, f)` (**single pass** for fold).
 - `default_if_empty`, `default_if_empty(def)`, `enumerate`, `scan(seed,f)`, `chunk(n)`, `stride(step)`.
 - `append(T)`, `prepend(T)`, `distinct()`, `distinct_by(kf)`, `union_with(Rng)`.
 
 ### 5.2 Relational
 
 - `join(inner, outer_key, inner_key, result_sel)` — inner join.
+- `left_join` / `right_join` — outer joins; `std::optional` marks missing side (`query.h`).
 - `group_join(inner, outer_key, inner_key)` — outer correlated with vectors of inners.
 - `to_lookup(key)` → alias **`group_by(key)`**.
 
@@ -122,13 +123,14 @@ qb/linq.h
 - `to_vector()` / `materialize()` — `reserve_if_random_access` + `std::copy` + `back_inserter`.
 - `to_unordered_map`, `to_map`, `to_dictionary` (throws on duplicate key).
 - `to_set`, `to_unordered_set`.
-- `except(Rng)`, `intersect(Rng)` — **C#-style set ops**: distinct left values (first-seen order); hash set of RHS plus a set to dedupe output; **requires hashable `value_type`**.
+- `except(Rng)`, `intersect(Rng)`, `except_by` / `intersect_by` / `union_by` — **C#-style** distinct / first-seen; `*_by` use **hashable keys** (`unordered_set` / `unordered_map`).
+- `count_by(keyfn)` — `vector<pair<key,int>>` in first-seen key order.
 - `take_last(n)`, `skip_last(n)` — materialize to `vector` (ring / trim patterns in implementation).
 
 ### 5.4 Search / quantifiers
 
 - `contains`, `index_of`, `last_index_of`, `sequence_equal` (+ custom comparator overload).
-- `any`, `count`, `long_count`, `long_count_if`.
+- `any`, `count`, `try_get_non_enumerated_count` (random-access only), `long_count`, `long_count_if`.
 - Fused: `sum_if`, `count_if`, `any_if`, `all_if`, `none_if` (**one pass**, no `where_iterator`).
 
 ### 5.5 Aggregates / stats
@@ -193,6 +195,7 @@ qb/linq.h
 | `repeat_view<T>` | forward | Counted repeats. |
 | `concat_view` | **forward** | `concat_iterator`: two legs + `in_first_` flag; `++` branches. **`reference`** is `decltype(false ? *It1& : *It2&)` so e.g. `int&` ∪ `const int&` from `union_with(const rng)` compiles. |
 | `zip_view` | forward | `zip_iterator`; ends at shorter range. |
+| `zip3_view` | forward | `zip3_iterator`; three legs, shortest wins. |
 | `default_if_empty_view` | forward | Yields default once if source empty. |
 | `distinct_view` | forward | **`unordered_set` per `begin()`** for seen keys (re-enumeration correct). |
 | `enumerate_view` | forward | `(index, *it)` pairs. |
@@ -202,8 +205,8 @@ qb/linq.h
 
 **Out-of-line `query_range_algorithms` split:**
 
-- **`query.h`:** `group_by`, `order_by`, `to_vector`, `to_unordered_map`, `to_map`, `to_dictionary`, `except`, `intersect`, `take_last`, `skip_last`, `join`, `group_join`, `to_unordered_set`, `to_set`.
-- **`extra_views.h` (tail):** `enumerate`, `scan`, `concat`, `zip`, `default_if_empty(value_type)`, `distinct_by`, `distinct`, `union_with`, `chunk`, `stride`, `append`, `prepend`.
+- **`query.h`:** `group_by`, `order_by`, `to_vector`, `to_unordered_map`, `to_map`, `to_dictionary`, `except`, `intersect`, `except_by`, `intersect_by`, `union_by`, `count_by`, `take_last`, `skip_last`, `join`, `left_join`, `right_join`, `group_join`, `to_unordered_set`, `to_set`.
+- **`extra_views.h` (tail):** `enumerate`, `scan`, `concat`, `zip` (binary + ternary overload), `default_if_empty(value_type)`, `distinct_by`, `distinct`, `union_with`, `chunk`, `stride`, `append`, `prepend`.
 
 ---
 
@@ -235,7 +238,7 @@ qb/linq.h
 
 ## 13. Verification hooks (repository)
 
-- **Tests:** `tests/*.cpp` (GoogleTest; 330+ discovered cases); CMake `QB_BUILD_TESTS`. **`linq_scan_and_iterator_layout_test.cpp`** — `scan` semantics / copies, `std::partial_sum` parity, EBO `sizeof` via a minimal one-pointer RA iterator; optional `vector::iterator` checks when `sizeof(VecIt)==sizeof(int*)` (else `GTEST_SKIP`). **`linq_predicates_robustness_test.cpp`** — reference / const-RHS pipelines, `take` short-circuiting, **`reverse`** after **`take` / `take_while`** edge cases. **CI** also runs **`sanitize`** (Ubuntu): **ASan + UBSan** on **`qb_linq_tests`** only; locally **`cmake --preset sanitize`** / **`ctest --preset sanitize`** ([**`docs/BUILDING.md`**](BUILDING.md)).
+- **Tests:** `tests/*.cpp` (GoogleTest; run `ctest -N` for the current count); CMake `QB_BUILD_TESTS`. **`linq_property_fuzz_test.cpp`** — randomized equivalence vs hand-written references (pipelines, set ops, **`join`** multiset + row-count check, **`left_join` / `right_join`**, **`zip`×3**, **`count_by`**, **`except_by` / `intersect_by` / `union_by`**). **`linq_robustness_parity_test.cpp`** — empty ranges, **`try_get_non_enumerated_count`** (`list`/`where`, **`take`**, **`to_vector`**, **`iota`**), inner join empty operands, outer-join row-count invariants. **`linq_surfaces_test.cpp`** — quick API smoke tests (terminals, zip re-walk, `default_if_empty`, new parity surfaces). **`linq_scan_and_iterator_layout_test.cpp`** — `scan` semantics / copies, `std::partial_sum` parity, EBO `sizeof` via a minimal one-pointer RA iterator; optional `vector::iterator` checks when `sizeof(VecIt)==sizeof(int*)` (else `GTEST_SKIP`). **`linq_predicates_robustness_test.cpp`** — reference / const-RHS pipelines, `take` short-circuiting, **`reverse`** after **`take` / `take_while`** edge cases. **CI** also runs **`sanitize`** (Ubuntu): **ASan + UBSan** on **`qb_linq_tests`** only; locally **`cmake --preset sanitize`** / **`ctest --preset sanitize`** ([**`docs/BUILDING.md`**](BUILDING.md)).
 - **Benchmarks:** `benchmarks/*.cpp` (Google Benchmark); `QB_BUILD_BENCHMARKS` → `qb_linq_benchmark`. **`bench_scan_contract.cpp`** — `scan` stress (per-step iterator copy) vs straight walk; **`select`** empty vs fat functor.
 - **Human README:** performance expectations — root `README.md` section **Performance & benchmarks**.
 

@@ -13,6 +13,7 @@
  */
 
 #include <cstddef>
+#include <optional>
 #include <type_traits>
 #include <utility>
 
@@ -34,14 +35,16 @@ namespace qb::linq {
  *         algorithms from `query_range_algorithms` or `materialized_range` extras).
  *
  * @par Lazy operations
- * `select`, `select_many`, `where`, `of_type`, `skip`, `skip_while`, `take`, `take_while`, `skip_last`,
- * `take_last`, `reverse`, `concat`, `zip`, `default_if_empty`, `enumerate`, `scan`, `chunk`, `stride`,
- * `distinct`, `distinct_by`, `union_with`, `join`, `group_join`, `to_lookup`, `group_by`, `order_by`,
- * `except`, `intersect`, map/set materializers, `append`, `prepend`.
+ * `select`, `select_indexed`, `select_many`, `where`, `where_indexed`, `of_type`, `skip`, `skip_while`, `take`,
+ * `take_while`, `skip_last`, `take_last`, `reverse`, `concat`, `zip` (two or three ranges), `default_if_empty`,
+ * `enumerate`, `scan`, `chunk`, `stride`, `distinct`, `distinct_by`, `union_with`, `union_by`, `join`,
+ * `left_join`, `right_join`, `group_join`, `to_lookup`, `group_by`, `order_by`, `except`, `intersect`,
+ * `except_by`, `intersect_by`, `count_by`, map/set materializers, `append`, `prepend`.
  *
  * @par Terminals (eager)
  * `first`/`last`/`single` families, `element_at`, `contains`, `index_of`, `sequence_equal`, `count`,
- * `any`/`all_if`/`none_if`, `sum`/`average`/min/max/`min_max`/`min_by`/`max_by`, `aggregate`/`fold`/`reduce`,
+ * `try_get_non_enumerated_count`, `any`/`all_if`/`none_if`, `sum`/`average`/min/max/`min_max`/`min_by`/`max_by`,
+ * `aggregate`/`fold`/`reduce`,
  * percentiles, variance, `std_dev`, `each`, `to_vector`/`materialize`, `operator[]` when supported.
  *
  * @par Related
@@ -201,6 +204,13 @@ public:
         return pipe(static_cast<Handle const&>(*this).zip(rhs));
     }
 
+    /** @brief Zip three sequences; stops at shortest length (`std::tuple` of references per step). */
+    template <class Rng2, class Rng3>
+    [[nodiscard]] auto zip(Rng2 const& r2, Rng3 const& r3) const
+    {
+        return pipe(static_cast<Handle const&>(*this).zip(r2, r3));
+    }
+
     /** @brief Single-pass fold over pairs with `rhs` (shorter length wins); prefer over `zip().select(...).aggregate(...)`. */
     template <class Rng, class Acc, class F>
     [[nodiscard]] std::decay_t<Acc> zip_fold(Rng const& rhs, Acc&& init, F&& f) const
@@ -253,6 +263,24 @@ public:
     {
         return pipe(static_cast<Handle const&>(*this).group_join(
             inner, std::forward<OuterKey>(ok), std::forward<InnerKey>(ik)));
+    }
+
+    /** @brief Left outer join: `result(outer, inner_optional)` with empty `optional` when no match. */
+    template <class Rng, class OuterKey, class InnerKey, class ResultSel>
+    [[nodiscard]] auto left_join(
+        Rng const& inner, OuterKey&& ok, InnerKey&& ik, ResultSel&& rs) const
+    {
+        return pipe(static_cast<Handle const&>(*this).left_join(inner, std::forward<OuterKey>(ok),
+            std::forward<InnerKey>(ik), std::forward<ResultSel>(rs)));
+    }
+
+    /** @brief Right outer join: `result(outer_optional, inner)` with empty `optional` when no outer match. */
+    template <class Rng, class OuterKey, class InnerKey, class ResultSel>
+    [[nodiscard]] auto right_join(
+        Rng const& inner, OuterKey&& ok, InnerKey&& ik, ResultSel&& rs) const
+    {
+        return pipe(static_cast<Handle const&>(*this).right_join(inner, std::forward<OuterKey>(ok),
+            std::forward<InnerKey>(ik), std::forward<ResultSel>(rs)));
     }
 
     /** @brief Same as `group_by(key)` (LINQ `ToLookup`). */
@@ -371,6 +399,37 @@ public:
     {
         return pipe(static_cast<Handle const&>(*this).intersect(rhs));
     }
+
+    /** @brief `Except` by key (LINQ `ExceptBy`). */
+    template <class Rng, class KeyLeft, class KeyRight>
+    [[nodiscard]] auto except_by(Rng const& rhs, KeyLeft&& kl, KeyRight&& kr) const
+    {
+        return pipe(static_cast<Handle const&>(*this).except_by(
+            rhs, std::forward<KeyLeft>(kl), std::forward<KeyRight>(kr)));
+    }
+
+    /** @brief `Intersect` by key (LINQ `IntersectBy`). */
+    template <class Rng, class KeyLeft, class KeyRight>
+    [[nodiscard]] auto intersect_by(Rng const& rhs, KeyLeft&& kl, KeyRight&& kr) const
+    {
+        return pipe(static_cast<Handle const&>(*this).intersect_by(
+            rhs, std::forward<KeyLeft>(kl), std::forward<KeyRight>(kr)));
+    }
+
+    /** @brief `Union` by key (LINQ `UnionBy`); same `value_type` on both sides. */
+    template <class Rng, class KeyLeft, class KeyRight>
+    [[nodiscard]] auto union_by(Rng const& rhs, KeyLeft&& kl, KeyRight&& kr) const
+    {
+        return pipe(static_cast<Handle const&>(*this).union_by(
+            rhs, std::forward<KeyLeft>(kl), std::forward<KeyRight>(kr)));
+    }
+
+    /** @brief Count per key, pairs in first-seen key order (LINQ `CountBy`). */
+    template <class KeyFn>
+    [[nodiscard]] auto count_by(KeyFn&& keyf) const
+    {
+        return pipe(static_cast<Handle const&>(*this).count_by(std::forward<KeyFn>(keyf)));
+    }
     /** @} */
 
     /** @name Tail / slice */
@@ -403,6 +462,13 @@ public:
         return pipe(static_cast<Handle const&>(*this).select(std::forward<F>(f)));
     }
 
+    /** @brief `Select` with index: `f(element, index)` (LINQ indexed overload). */
+    template <class F>
+    [[nodiscard]] auto select_indexed(F&& f) const
+    {
+        return pipe(static_cast<Handle const&>(*this).select_indexed(std::forward<F>(f)));
+    }
+
     /** @brief Tuple of projections per element — not C# `SelectMany` flattening (see `@ref linq`). */
     template <class... Fs>
     [[nodiscard]] auto select_many(Fs&&... fs) const
@@ -415,6 +481,13 @@ public:
     [[nodiscard]] auto where(P&& p) const
     {
         return pipe(static_cast<Handle const&>(*this).where(std::forward<P>(p)));
+    }
+
+    /** @brief `Where` with index: `pred(element, index)`. */
+    template <class P>
+    [[nodiscard]] auto where_indexed(P&& p) const
+    {
+        return pipe(static_cast<Handle const&>(*this).where_indexed(std::forward<P>(p)));
     }
 
     /** @brief `dynamic_cast` filter for polymorphic pointer sequences (LINQ `OfType`). */
@@ -549,6 +622,12 @@ public:
 
     /** @brief Element count (`std::distance`; LINQ `Count`). */
     [[nodiscard]] std::size_t count() const { return static_cast<Handle const&>(*this).count(); }
+
+    /** @brief O(1) size for random-access ranges only; otherwise `nullopt` (LINQ-style non-enumerated count). */
+    [[nodiscard]] std::optional<std::size_t> try_get_non_enumerated_count() const
+    {
+        return static_cast<Handle const&>(*this).try_get_non_enumerated_count();
+    }
     /** @} */
 
     /** @name Materialization */

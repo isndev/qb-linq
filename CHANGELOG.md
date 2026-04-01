@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-## [1.3.0] - 2026-04-08
+## [1.3.0] - 2026-04-01
 
 ### Fixed
 
@@ -15,8 +15,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- **Docs:** **`qb/linq.h`** and README — **`from`** and **lazy pipeline storage lifetime** (non-owning iterators; keep the source container or materialize before chaining lazy stages).
-- **Tests:** **`linq_exceptions_test.cpp`**, **`linq_property_fuzz_test.cpp`**, and broader coverage in **`linq_materialize_test.cpp`**, **`linq_pipeline_test.cpp`**, **`linq_views_compositional_test.cpp`**, **`linq_relational_extended_test.cpp`**, **`linq_ordering_advanced_test.cpp`**, **`linq_select_each_test.cpp`**, **`linq_join_set_test.cpp`**, **`linq_factories_test.cpp`**, **`linq_terminal_test.cpp`**, **`linq_zip_take_where_test.cpp`**.
+- **LINQ / .NET-style APIs (lazy or materializing as documented):** **`select_indexed`**, **`where_indexed`**, **`zip(r2, r3)`** (three-way, **`std::tuple`** of references), **`except_by`**, **`intersect_by`**, **`union_by`**, **`count_by`**, **`try_get_non_enumerated_count()`**, **`left_join`**, **`right_join`** (outer joins via **`std::optional`** for the missing side). See README **Complete API** and **`qb/linq.h`** caveats.
+- **Docs:** **`qb/linq.h`**, README, **`docs/LLM_CONTEXT.md`** — API tables, C# quick map, **`from`** / lazy pipeline lifetime, set-op and outer-join notes.
+- **Tests:** **`linq_linq_parity_extended_test.cpp`**, **`linq_robustness_parity_test.cpp`**, **`linq_join_set_test.cpp`**; extended **`linq_property_fuzz_test.cpp`** (inner-join row count vs nested loop, outer joins, **`zip`×3**, **`count_by`**, key-based set ops) and **`linq_surfaces_test.cpp`** (compile-time / surface checks for new APIs).
 - **CI / CMake:** Ubuntu **`sanitize`** job (**ASan** + **UBSan** on **`qb_linq_tests`**); **`sanitize`** configure preset and **`ctest --preset sanitize`** ([**`docs/BUILDING.md`**](docs/BUILDING.md)).
 
 ## [1.2.1] - 2026-04-03
@@ -85,6 +86,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Doxygen HTML docs (**`qb_linq_docs`**, Doxygen Awesome under `docs/doxygen/`).
 - Guides under **`docs/`** (building, versioning, LLM context); **CONTRIBUTING**, **SECURITY**, **AGENTS**; GitHub issue/PR templates; documentation moved from **`doc/`** to **`docs/`**.
 
+[Unreleased]: https://github.com/isndev/qb-linq/compare/v1.3.0...HEAD
 [1.3.0]: https://github.com/isndev/qb-linq/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/isndev/qb-linq/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/isndev/qb-linq/compare/v1.1.0...v1.2.0

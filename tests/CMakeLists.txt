@@ -24,6 +24,8 @@ set(_qb_linq_test_sources
     linq_factories_test.cpp
     linq_fused_aggregates_test.cpp
     linq_join_set_test.cpp
+    linq_linq_parity_extended_test.cpp
+    linq_robustness_parity_test.cpp
     linq_relational_extended_test.cpp
     linq_order_group_lookup_test.cpp
     linq_ordering_advanced_test.cpp

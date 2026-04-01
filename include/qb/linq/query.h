@@ -33,6 +33,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <stdexcept>
 #include <tuple>
@@ -537,8 +538,8 @@ private:
 /**
  * @namespace qb::linq::detail
  * @ingroup linq
- * @brief Template definitions below: `group_by`, `order_by`, container materializers, `join` / `group_join`,
- *        set-like ops. Declarations live in `query_range.h`.
+ * @brief Template definitions below: `group_by`, `order_by`, container materializers, `join` / `left_join` /
+ *        `right_join` / `group_join`, set-like ops. Declarations live in `query_range.h`.
  */
 namespace detail {
 
@@ -703,6 +704,136 @@ query_range_algorithms<Derived, Iter>::intersect(Rng const& rhs) const
     return wrap_materialized(std::move(owner));
 }
 
+/** @brief Out-of-line `except_by`: distinct left elements by key, excluding keys present on the right. */
+template <class Derived, class Iter>
+template <class Rng, class KeyLeft, class KeyRight>
+materialized_range<typename std::vector<typename query_range_algorithms<Derived, Iter>::value_type>::iterator,
+    std::vector<typename query_range_algorithms<Derived, Iter>::value_type>>
+query_range_algorithms<Derived, Iter>::except_by(
+    Rng const& rhs, KeyLeft&& key_left, KeyRight&& key_right) const
+{
+    using val_t = typename query_range_algorithms<Derived, Iter>::value_type;
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    using ref_l = typename query_range_algorithms<Derived, Iter>::reference;
+    using rri = decltype(rhs.begin());
+    using ref_r = decltype(*std::declval<rri>());
+    using K = std::decay_t<std::invoke_result_t<KeyLeft&, ref_l>>;
+    static_assert(std::is_same_v<K, std::decay_t<std::invoke_result_t<KeyRight&, ref_r>>>,
+        "qb::linq::except_by: key types from left and right selectors must match");
+    std::unordered_set<K> ban;
+    reserve_if_random_access(ban, rhs.begin(), rhs.end());
+    for (auto it = rhs.begin(); it != rhs.end(); ++it)
+        ban.insert(key_right(*it));
+    std::unordered_set<K> yielded_keys;
+    auto owner = std::make_shared<std::vector<val_t>>();
+    reserve_if_random_access(*owner, derived().begin(), derived().end());
+    for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
+        K const k = key_left(*it);
+        if (ban.find(k) == ban.end() && yielded_keys.insert(k).second)
+            owner->push_back(*it);
+    }
+    return wrap_materialized(std::move(owner));
+}
+
+/** @brief Out-of-line `intersect_by`: distinct left elements by key whose key appears on the right. */
+template <class Derived, class Iter>
+template <class Rng, class KeyLeft, class KeyRight>
+materialized_range<typename std::vector<typename query_range_algorithms<Derived, Iter>::value_type>::iterator,
+    std::vector<typename query_range_algorithms<Derived, Iter>::value_type>>
+query_range_algorithms<Derived, Iter>::intersect_by(
+    Rng const& rhs, KeyLeft&& key_left, KeyRight&& key_right) const
+{
+    using val_t = typename query_range_algorithms<Derived, Iter>::value_type;
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    using ref_l = typename query_range_algorithms<Derived, Iter>::reference;
+    using rri = decltype(rhs.begin());
+    using ref_r = decltype(*std::declval<rri>());
+    using K = std::decay_t<std::invoke_result_t<KeyLeft&, ref_l>>;
+    static_assert(std::is_same_v<K, std::decay_t<std::invoke_result_t<KeyRight&, ref_r>>>,
+        "qb::linq::intersect_by: key types from left and right selectors must match");
+    std::unordered_set<K> want;
+    reserve_if_random_access(want, rhs.begin(), rhs.end());
+    for (auto it = rhs.begin(); it != rhs.end(); ++it)
+        want.insert(key_right(*it));
+    std::unordered_set<K> yielded_keys;
+    auto owner = std::make_shared<std::vector<val_t>>();
+    reserve_if_random_access(*owner, derived().begin(), derived().end());
+    for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
+        K const k = key_left(*it);
+        if (want.find(k) != want.end() && yielded_keys.insert(k).second)
+            owner->push_back(*it);
+    }
+    return wrap_materialized(std::move(owner));
+}
+
+/** @brief Out-of-line `union_by`: concat by unique keys (left order, then right-only keys). */
+template <class Derived, class Iter>
+template <class Rng, class KeyLeft, class KeyRight>
+materialized_range<typename std::vector<typename query_range_algorithms<Derived, Iter>::value_type>::iterator,
+    std::vector<typename query_range_algorithms<Derived, Iter>::value_type>>
+query_range_algorithms<Derived, Iter>::union_by(
+    Rng const& rhs, KeyLeft&& key_left, KeyRight&& key_right) const
+{
+    using val_t = typename query_range_algorithms<Derived, Iter>::value_type;
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    using ref_l = typename query_range_algorithms<Derived, Iter>::reference;
+    using rri = decltype(rhs.begin());
+    using ref_r = decltype(*std::declval<rri>());
+    static_assert(std::is_same_v<val_t, std::remove_cv_t<std::remove_reference_t<ref_r>>>,
+        "qb::linq::union_by requires the same element type on both sides");
+    using K = std::decay_t<std::invoke_result_t<KeyLeft&, ref_l>>;
+    static_assert(std::is_same_v<K, std::decay_t<std::invoke_result_t<KeyRight&, ref_r>>>,
+        "qb::linq::union_by: key types from left and right selectors must match");
+    std::unordered_set<K> seen;
+    auto owner = std::make_shared<std::vector<val_t>>();
+    reserve_if_random_access(*owner, derived().begin(), derived().end());
+    reserve_if_random_access(*owner, rhs.begin(), rhs.end());
+    for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
+        K const k = key_left(*it);
+        if (seen.insert(k).second)
+            owner->push_back(*it);
+    }
+    for (auto it = rhs.begin(); it != rhs.end(); ++it) {
+        K const k = key_right(*it);
+        if (seen.insert(k).second)
+            owner->push_back(*it);
+    }
+    return wrap_materialized(std::move(owner));
+}
+
+/** @brief Out-of-line `count_by`: (key, count) pairs in first-seen key order. */
+template <class Derived, class Iter>
+template <class KeyFn>
+auto query_range_algorithms<Derived, Iter>::count_by(KeyFn&& keyf) const -> materialized_range<
+    typename std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&,
+                                           typename query_range_algorithms<Derived, Iter>::reference>>,
+                                      int>>::iterator,
+    std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&,
+                                    typename query_range_algorithms<Derived, Iter>::reference>>,
+                             int>>>
+{
+    using ref = typename query_range_algorithms<Derived, Iter>::reference;
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    using K = std::decay_t<std::invoke_result_t<KeyFn&, ref>>;
+    using row_t = std::pair<K, int>;
+    using vec_t = std::vector<row_t>;
+    std::unordered_map<K, int> counts;
+    std::vector<K> order;
+    reserve_if_random_access(counts, derived().begin(), derived().end());
+    for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
+        K const k = keyf(*it);
+        auto const r = counts.try_emplace(k, 0);
+        if (r.second)
+            order.push_back(k);
+        ++r.first->second;
+    }
+    auto owner = std::make_shared<vec_t>();
+    owner->reserve(order.size());
+    for (K const& k : order)
+        owner->emplace_back(k, counts.find(k)->second);
+    return wrap_materialized(std::move(owner));
+}
+
 /** @brief Out-of-line `take_last`: tail `n` elements (random-access → copy only `min(n,len)` items). */
 template <class Derived, class Iter>
 materialized_range<typename std::vector<typename query_range_algorithms<Derived, Iter>::value_type>::iterator,
@@ -845,6 +976,82 @@ auto query_range_algorithms<Derived, Iter>::group_join(
         for (auto in = r.first; in != r.second; ++in)
             inners.push_back(in->second);
         owner->emplace_back(static_cast<val_t>(*it), std::move(inners));
+    }
+    return wrap_materialized(std::move(owner));
+}
+
+/** @brief Out-of-line `left_join`: like `join`, plus one `nullopt` inner per unmatched outer. */
+template <class Derived, class Iter>
+template <class Rng, class OuterKey, class InnerKey, class ResultSel>
+auto query_range_algorithms<Derived, Iter>::left_join(Rng const& inner, OuterKey&& outer_key,
+    InnerKey&& inner_key, ResultSel&& result) const
+{
+    using ref_t = typename query_range_algorithms<Derived, Iter>::reference;
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    using inner_iter = decltype(inner.begin());
+    using inner_ref_t = iter_reference_t<inner_iter>;
+    using K = std::decay_t<std::invoke_result_t<OuterKey&, ref_t>>;
+    static_assert(std::is_same_v<K, std::decay_t<std::invoke_result_t<InnerKey&, inner_ref_t>>>,
+        "qb::linq::left_join: outer and inner key types must match");
+    using InnerVal = std::decay_t<inner_ref_t>;
+    using Row = std::decay_t<std::invoke_result_t<ResultSel&, ref_t, std::optional<InnerVal> const&>>;
+    std::unordered_multimap<K, InnerVal> map;
+    reserve_if_random_access(map, inner.begin(), inner.end());
+    for (inner_iter it = inner.begin(); it != inner.end(); ++it)
+        map.emplace(inner_key(*it), InnerVal(*it));
+    auto owner = std::make_shared<std::vector<Row>>();
+    reserve_if_random_access(*owner, derived().begin(), derived().end());
+    for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
+        K const k = outer_key(*it);
+        auto r = map.equal_range(k);
+        if (r.first == r.second) {
+            std::optional<InnerVal> const empty{};
+            owner->push_back(result(*it, empty));
+        } else {
+            for (auto in = r.first; in != r.second; ++in) {
+                std::optional<InnerVal> const mo{in->second};
+                owner->push_back(result(*it, mo));
+            }
+        }
+    }
+    return wrap_materialized(std::move(owner));
+}
+
+/** @brief Out-of-line `right_join`: index outer (`*this`); emit every inner, optional outer when unmatched. */
+template <class Derived, class Iter>
+template <class Rng, class OuterKey, class InnerKey, class ResultSel>
+auto query_range_algorithms<Derived, Iter>::right_join(Rng const& inner, OuterKey&& outer_key,
+    InnerKey&& inner_key, ResultSel&& result) const
+{
+    using ref_t = typename query_range_algorithms<Derived, Iter>::reference;
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    using val_t = typename query_range_algorithms<Derived, Iter>::value_type;
+    using inner_iter = decltype(inner.begin());
+    using inner_ref_t = iter_reference_t<inner_iter>;
+    using K = std::decay_t<std::invoke_result_t<OuterKey&, ref_t>>;
+    static_assert(std::is_same_v<K, std::decay_t<std::invoke_result_t<InnerKey&, inner_ref_t>>>,
+        "qb::linq::right_join: outer and inner key types must match");
+    using InnerVal = std::decay_t<inner_ref_t>;
+    using Row = std::decay_t<std::invoke_result_t<ResultSel&, std::optional<val_t> const&, InnerVal const&>>;
+    std::unordered_multimap<K, val_t> map;
+    reserve_if_random_access(map, derived().begin(), derived().end());
+    for (iterator_t it = derived().begin(); it != derived().end(); ++it)
+        map.emplace(outer_key(*it), static_cast<val_t>(*it));
+    auto owner = std::make_shared<std::vector<Row>>();
+    reserve_if_random_access(*owner, inner.begin(), inner.end());
+    for (inner_iter it = inner.begin(); it != inner.end(); ++it) {
+        InnerVal const inner_val(*it);
+        K const k = inner_key(*it);
+        auto r = map.equal_range(k);
+        if (r.first == r.second) {
+            std::optional<val_t> const empty{};
+            owner->push_back(result(empty, inner_val));
+        } else {
+            for (auto out = r.first; out != r.second; ++out) {
+                std::optional<val_t> const mo{out->second};
+                owner->push_back(result(mo, inner_val));
+            }
+        }
     }
     return wrap_materialized(std::move(owner));
 }

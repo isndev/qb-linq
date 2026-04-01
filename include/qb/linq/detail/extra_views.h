@@ -31,6 +31,7 @@
  * | `repeat_iterator` / `repeat_view` | `n` copies of one value |
  * | `concat_iterator` / `concat_view` | Two ranges back-to-back |
  * | `zip_iterator` / `zip_view` | Pairwise tuples until shorter side ends |
+ * | `zip3_iterator` / `zip3_view` | Three-way tuples until shortest side ends |
  * | `default_if_empty_iterator` / `default_if_empty_view` | Default value if source empty |
  * | `distinct_iterator` / `distinct_view` | First occurrence per key (hash set) |
  * | `enumerate_iterator` / `enumerate_view` | `(index, element)` |
@@ -493,6 +494,101 @@ public:
     }
     /** @brief Canonical end `(a1_, b1_, a1_, b1_)`. */
     [[nodiscard]] zip_iterator<It1, It2> end() const { return {a1_, b1_, a1_, b1_}; }
+};
+
+// ---------------------------------------------------------------------------
+// zip3_view — three sequences in lockstep
+// ---------------------------------------------------------------------------
+
+/**
+ * @ingroup linq
+ * @brief Triple zip: advances three cursors; canonical end when any leg exhausts.
+ */
+template <class It1, class It2, class It3>
+class zip3_iterator {
+    It1 a_{};
+    It2 b_{};
+    It3 c_{};
+    It1 ae_{};
+    It2 be_{};
+    It3 ce_{};
+
+public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = std::tuple<typename std::iterator_traits<It1>::value_type,
+        typename std::iterator_traits<It2>::value_type, typename std::iterator_traits<It3>::value_type>;
+    using difference_type = std::ptrdiff_t;
+    using pointer = void;
+    using reference = std::tuple<typename std::iterator_traits<It1>::reference,
+        typename std::iterator_traits<It2>::reference, typename std::iterator_traits<It3>::reference>;
+
+    zip3_iterator() = default;
+
+    zip3_iterator(It1 a, It2 b, It3 c, It1 ae, It2 be, It3 ce)
+        : a_(std::move(a)), b_(std::move(b)), c_(std::move(c)), ae_(std::move(ae)), be_(std::move(be)), ce_(std::move(ce))
+    {}
+
+    [[nodiscard]] reference operator*() const { return reference{*a_, *b_, *c_}; }
+
+    zip3_iterator& operator++()
+    {
+        if (a_ == ae_ && b_ == be_ && c_ == ce_)
+            return *this;
+        if (a_ != ae_)
+            ++a_;
+        if (b_ != be_)
+            ++b_;
+        if (c_ != ce_)
+            ++c_;
+        if (a_ == ae_ || b_ == be_ || c_ == ce_) {
+            a_ = ae_;
+            b_ = be_;
+            c_ = ce_;
+        }
+        return *this;
+    }
+
+    zip3_iterator operator++(int)
+    {
+        auto t = *this;
+        ++*this;
+        return t;
+    }
+
+    [[nodiscard]] friend bool operator==(zip3_iterator const& x, zip3_iterator const& y) noexcept
+    {
+        return x.a_ == y.a_ && x.b_ == y.b_ && x.c_ == y.c_;
+    }
+    [[nodiscard]] friend bool operator!=(zip3_iterator const& x, zip3_iterator const& y) noexcept
+    {
+        return !(x == y);
+    }
+};
+
+/**
+ * @ingroup linq
+ * @brief Lazy zip of three ranges.
+ */
+template <class It1, class It2, class It3>
+class zip3_view : public query_range_algorithms<zip3_view<It1, It2, It3>, zip3_iterator<It1, It2, It3>> {
+    It1 a0_{}, a1_{};
+    It2 b0_{}, b1_{};
+    It3 c0_{}, c1_{};
+
+public:
+    zip3_view(It1 ab, It1 ae, It2 bb, It2 be, It3 cb, It3 ce)
+        : a0_(std::move(ab)), a1_(std::move(ae)), b0_(std::move(bb)), b1_(std::move(be)), c0_(std::move(cb)),
+          c1_(std::move(ce))
+    {}
+
+    [[nodiscard]] zip3_iterator<It1, It2, It3> begin() const
+    {
+        if (a0_ == a1_ || b0_ == b1_ || c0_ == c1_)
+            return {a1_, b1_, c1_, a1_, b1_, c1_};
+        return {a0_, b0_, c0_, a1_, b1_, c1_};
+    }
+
+    [[nodiscard]] zip3_iterator<It1, It2, It3> end() const { return {a1_, b1_, c1_, a1_, b1_, c1_}; }
 };
 
 // ---------------------------------------------------------------------------
@@ -1236,6 +1332,18 @@ query_range_algorithms<Derived, Iter>::zip(Rng const& rhs) const
     using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
     return zip_view<iterator_t, decltype(rhs.begin())>(
         derived().begin(), derived().end(), rhs.begin(), rhs.end());
+}
+
+/** @brief Out-of-line `zip` (three ranges): shortest length wins. */
+template <class Derived, class Iter>
+template <class Rng2, class Rng3>
+zip3_view<typename query_range_algorithms<Derived, Iter>::iterator,
+    decltype(std::declval<Rng2 const&>().begin()), decltype(std::declval<Rng3 const&>().begin())>
+query_range_algorithms<Derived, Iter>::zip(Rng2 const& r2, Rng3 const& r3) const
+{
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    return zip3_view<iterator_t, decltype(r2.begin()), decltype(r3.begin())>(derived().begin(), derived().end(),
+        r2.begin(), r2.end(), r3.begin(), r3.end());
 }
 
 /** @brief Out-of-line `default_if_empty`: one `def` when `derived()` is empty. */

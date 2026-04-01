@@ -144,8 +144,10 @@ Unless noted, methods are **`const`** and return a new **`enumerable`** for lazy
 | API | Role |
 |-----|------|
 | **`select(f)`** | Map each element. |
+| **`select_indexed(f)`** | `f(element, index)` (lazy; zero-based index). |
 | **`select_many(fs...)`** | **Tuple** of one projection per loader per row (not nested flattening). |
 | **`where(pred)`** | Filter; first `begin()` may cache first match. |
+| **`where_indexed(pred)`** | `pred(element, index)` (lazy). |
 | **`of_type<U>()`** | Polymorphic **`dynamic_cast`** filter (`value_type` must be pointer, pointee polymorphic). |
 | **`skip(n)`** | Drop first `n`. |
 | **`skip_while(pred)`** | Drop while predicate true. |
@@ -160,6 +162,7 @@ Unless noted, methods are **`const`** and return a new **`enumerable`** for lazy
 |-----|------|
 | **`concat(rhs)`** | Concatenate another range (same `value_type`). |
 | **`zip(rhs)`** | Pairwise zip; stops at shorter length. |
+| **`zip(r2, r3)`** | Three-way zip; `std::tuple` of references; stops at shortest length. |
 | **`zip_fold(rhs, init, f)`** | Single-pass fold over pairs `f(acc, left, right)`; same length rule as `zip`. |
 | **`append(v)`** / **`prepend(v)`** | Single element after/before sequence. |
 | **`default_if_empty()`** / **`default_if_empty(def)`** | Sentinel when empty. |
@@ -184,6 +187,8 @@ Unless noted, methods are **`const`** and return a new **`enumerable`** for lazy
 | API | Role |
 |-----|------|
 | **`join(inner, outer_key, inner_key, result_sel)`** | Inner join; flat result rows. |
+| **`left_join(inner, outer_key, inner_key, result_sel)`** | Left outer join; `result_sel(outer, std::optional<inner>)` — empty when no match. |
+| **`right_join(inner, outer_key, inner_key, result_sel)`** | Right outer join; `result_sel(std::optional<outer>, inner)` — empty when no match. |
 | **`group_join(inner, outer_key, inner_key)`** | Outer + inner groups per key. |
 
 ### Set-style (after materialization / hash)
@@ -192,6 +197,10 @@ Unless noted, methods are **`const`** and return a new **`enumerable`** for lazy
 |-----|------|
 | **`except(rhs)`** | Set difference (**.NET `Except`**): distinct left values **not** in `rhs`, first-seen order. |
 | **`intersect(rhs)`** | Set intersection (**.NET `Intersect`**): distinct left values also in `rhs`, first-seen order. |
+| **`except_by(rhs, keyL, keyR)`** | **.NET `ExceptBy`**: distinct left rows by `keyL`, excluding keys from `rhs` via `keyR`. |
+| **`intersect_by(rhs, keyL, keyR)`** | **.NET `IntersectBy`**: distinct left rows by key present in `rhs` keys. |
+| **`union_by(rhs, keyL, keyR)`** | **.NET `UnionBy`**: same `value_type` both sides; unique keys, left then new right keys. |
+| **`count_by(keyfn)`** | **.NET `CountBy`**: `(key, count)` pairs in first-seen key order (materialized). |
 | **`union_with(rhs)`** | `concat` + `distinct`. |
 
 ### Materialization — collections & maps
@@ -220,6 +229,7 @@ Unless noted, methods are **`const`** and return a new **`enumerable`** for lazy
 |-----|------|
 | **`any()`** | Non-empty? |
 | **`count()`** / **`long_count()`** | `std::distance` (full scan). |
+| **`try_get_non_enumerated_count()`** | `optional` size for **random-access** ranges only; no linear scan. |
 | **`count_if` / `long_count_if`** | Predicate count (fused). |
 | **`any_if` / `all_if` / `none_if`** | Fused predicate quantifiers. |
 
@@ -373,17 +383,20 @@ qb::linq::from(data).each([](int& x) { x *= 2; });
 
 | C# | qb-linq |
 |----|---------|
-| `Where` | `where` |
-| `Select` | `select` |
+| `Where` / indexed | `where` / `where_indexed` |
+| `Select` / indexed | `select` / `select_indexed` |
 | `SelectMany` (flatten) | use `select` + `concat` / loops; **`select_many`** = tuple bundle |
 | `OrderBy` / `ThenBy` | `order_by(asc(...), desc(...))` |
 | `GroupBy` | `group_by` |
 | `Join` / `GroupJoin` | `join` / `group_join` |
+| Left / right outer join (`DefaultIfEmpty` pattern) | `left_join` / `right_join` (`std::optional` for missing side) |
 | `ToList` | `to_vector` / `materialize` |
 | `ToDictionary` | `to_dictionary` / `to_map` / `to_unordered_map` |
 | `Distinct` | `distinct` / `distinct_by` |
 | `Union` / `Except` / `Intersect` | `union_with` / `except` / `intersect` |
-| `Zip` | `zip` |
+| `UnionBy` / `ExceptBy` / `IntersectBy` / `CountBy` | `union_by` / `except_by` / `intersect_by` / `count_by` |
+| `Zip` | `zip` / `zip(r2,r3)` |
+| `TryGetNonEnumeratedCount` | `try_get_non_enumerated_count` |
 | `Aggregate` | `aggregate` / `reduce` / `fold` |
 | `Sum` / `Average` / `Min` / `Max` | `sum`, `average`, `min`, `max`, `min_max`, … |
 | `Any` / `All` / `Count` | `any`, `all_if`, `count`, `count_if`, … |
@@ -448,7 +461,7 @@ include/qb/linq/
     group_by.h
     order.h
     type_traits.h
-tests/                 # GoogleTest (see tests/CMakeLists.txt)
+tests/                 # GoogleTest — includes randomized reference checks (`linq_property_fuzz_test.cpp`) and edge-case suites (`linq_robustness_parity_test.cpp`, …); see `tests/CMakeLists.txt`
 benchmarks/            # Google Benchmark (see benchmarks/CMakeLists.txt)
 cmake/                 # qb-linq-config.cmake.in, version.h.in → generated qb/linq/version.h
 docs/                  # README (hub), BUILDING, VERSIONING, LLM_CONTEXT, Doxyfile.in, doxygen/

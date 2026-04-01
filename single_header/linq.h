@@ -618,7 +618,7 @@ public:
  *
  * @par Materialization helpers
  * `reserve_if_random_access(c, b, e)` calls `c.reserve(e - b)` only when `[b,e)` is random-access, avoiding an
- * extra pass for forward iterators. Used by `to_vector`, `order_by`, maps, sets, and join/group_join.
+ * extra pass for forward iterators. Used by `to_vector`, `order_by`, maps, sets, and join / group_join / outer joins.
  *
  * @par Exceptions
  * Many terminals throw `std::out_of_range` with messages prefixed by `qb::linq::` when preconditions fail
@@ -687,6 +687,8 @@ template <class It1, class It2>
 class concat_view; ///< Concatenation of two forward sequences (`extra_views.h`).
 template <class It1, class It2>
 class zip_view; ///< Pairwise zip; stops at shorter range (`extra_views.h`).
+template <class It1, class It2, class It3>
+class zip3_view; ///< Three-way zip; stops at shortest range (`extra_views.h`).
 template <class It, class T>
 class default_if_empty_view; ///< Yields `def` once when source empty (`extra_views.h`).
 template <class BaseIt, class KeyFn, class KeyT>
@@ -740,15 +742,16 @@ struct of_type_pred {
  * @tparam Iter Iterator type used by `Derived` (explicit to break incomplete-type cycles).
  *
  * @par Method families
- * - **Slicing / transform:** `select`, `select_many`, `where`, `of_type`, `skip`, `skip_while`, `take`,
- *   `take_while`, `reverse`.
- * - **Composition:** `concat`, `zip`, `default_if_empty`, `enumerate`, `scan`, `chunk`, `stride`, `append`,
- *   `prepend`, `distinct`, `distinct_by`, `union_with`.
- * - **Relational:** `join`, `group_join`, `to_lookup` (alias of `group_by(key)`).
+ * - **Slicing / transform:** `select`, `select_indexed`, `select_many`, `where`, `where_indexed`, `of_type`,
+ *   `skip`, `skip_while`, `take`, `take_while`, `reverse`.
+ * - **Composition:** `concat`, `zip` (2- or 3-range), `default_if_empty`, `enumerate`, `scan`, `chunk`, `stride`,
+ *   `append`, `prepend`, `distinct`, `distinct_by`, `union_with`.
+ * - **Relational:** `join`, `left_join`, `right_join`, `group_join`, `to_lookup` (alias of `group_by(key)`).
  * - **Materialize:** `group_by`, `order_by`, `to_vector`, `to_map`, `to_unordered_map`, `to_dictionary`,
- *   `to_set`, `to_unordered_set`, `except`, `intersect`, `take_last`, `skip_last`.
- * - **Search / quantifiers:** `contains`, `index_of`, `last_index_of`, `sequence_equal`, `any`, `count`, fused
- *   `*_if` helpers, `first`/`last`/`element_at`/`single` families.
+ *   `to_set`, `to_unordered_set`, `except`, `intersect`, `except_by`, `intersect_by`, `union_by`, `count_by`,
+ *   `take_last`, `skip_last`.
+ * - **Search / quantifiers:** `contains`, `index_of`, `last_index_of`, `sequence_equal`, `any`, `count`,
+ *   `try_get_non_enumerated_count`, fused `*_if` helpers, `first`/`last`/`element_at`/`single` families.
  * - **Aggregates / stats:** `sum`, `sum_if`, `average`, `average_if`, `min`/`max`/`min_max`, `min_by`/`max_by`,
  *   `aggregate`/`fold`/`reduce`, percentiles, variance, standard deviation.
  */
@@ -768,6 +771,23 @@ public:
     [[nodiscard]] std::size_t count() const
     {
         return static_cast<std::size_t>(std::distance(derived().begin(), derived().end()));
+    }
+
+    /**
+     * @brief O(1) length when iterators are random-access; otherwise `nullopt` (no full scan).
+     * @details Mirrors the idea of `TryGetNonEnumeratedCount` / sized ranges: forward-only sequences return
+     *          `nullopt` even though `count()` could be computed with a linear walk.
+     */
+    [[nodiscard]] std::optional<std::size_t> try_get_non_enumerated_count() const
+    {
+        using cat = typename std::iterator_traits<iterator>::iterator_category;
+        if constexpr (std::is_base_of_v<std::random_access_iterator_tag, cat>) {
+            auto const d = derived().end() - derived().begin();
+            if (d < 0)
+                return std::nullopt;
+            return static_cast<std::size_t>(d);
+        }
+        return std::nullopt;
     }
 
     /** @brief First element; throws `std::out_of_range("qb::linq::first")` if empty. @return `reference` into sequence. */
@@ -965,6 +985,13 @@ public:
     [[nodiscard]] zip_view<iterator, decltype(std::declval<Rng const&>().begin())> zip(Rng const& rhs) const;
 
     /**
+     * @brief Zip three forward sequences; ends when any leg ends (`std::tuple` of element references per step).
+     */
+    template <class Rng2, class Rng3>
+    [[nodiscard]] zip3_view<iterator, decltype(std::declval<Rng2 const&>().begin()),
+        decltype(std::declval<Rng3 const&>().begin())> zip(Rng2 const& r2, Rng3 const& r3) const;
+
+    /**
      * @brief Single-pass fold over zipped pairs (`*this` vs `rhs`); stops at the shorter length.
      * @tparam Acc Accumulator type (decayed from `init`).
      * @tparam F Callable `Acc(Acc&& acc, reference left, RhsRef right)` returning the next accumulator.
@@ -1011,6 +1038,24 @@ public:
     /** @brief Correlates outer elements with all inner matches (vector of inners per outer key). */
     template <class Rng, class OuterKey, class InnerKey>
     [[nodiscard]] auto group_join(Rng const& inner, OuterKey&& outer_key, InnerKey&& inner_key) const;
+
+    /**
+     * @brief Left outer join: every outer row appears at least once; `result(outer, inner_opt)` uses empty
+     *        `optional` when no inner key matches (LINQ `GroupJoin` + `DefaultIfEmpty` flat pattern).
+     * @note Empty outer → empty result. Empty inner → one row per outer (all with empty `optional` inner).
+     */
+    template <class Rng, class OuterKey, class InnerKey, class ResultSel>
+    [[nodiscard]] auto left_join(
+        Rng const& inner, OuterKey&& outer_key, InnerKey&& inner_key, ResultSel&& result) const;
+
+    /**
+     * @brief Right outer join: every inner row appears at least once; `result(outer_opt, inner)` uses empty
+     *        `optional` when no outer key matches (`right_join` ≡ swapped `left_join`; see README).
+     * @note Empty inner → empty result. Empty outer → one row per inner (all with empty `optional` outer).
+     */
+    template <class Rng, class OuterKey, class InnerKey, class ResultSel>
+    [[nodiscard]] auto right_join(
+        Rng const& inner, OuterKey&& outer_key, InnerKey&& inner_key, ResultSel&& result) const;
 
     /** @brief Same as `group_by(key)` (LINQ `ToLookup` naming). */
     template <class KeyFn>
@@ -1071,6 +1116,40 @@ public:
     [[nodiscard]] materialized_range<typename std::vector<value_type>::iterator, std::vector<value_type>> intersect(
         Rng const& rhs) const;
 
+    /**
+     * @brief Set difference by key (C# `Enumerable.ExceptBy`): **distinct** left elements by `key_left(*it)`,
+     *        first-seen order, excluding any key present in `rhs` via `key_right(*jt)`.
+     * @details Keys must be usable in `std::unordered_set` (hash + equality), as for `except`.
+     */
+    template <class Rng, class KeyLeft, class KeyRight>
+    [[nodiscard]] materialized_range<typename std::vector<value_type>::iterator, std::vector<value_type>> except_by(
+        Rng const& rhs, KeyLeft&& key_left, KeyRight&& key_right) const;
+
+    /**
+     * @brief Set intersection by key (C# `Enumerable.IntersectBy`): **distinct** left elements by `key_left`,
+     *        first-seen order, whose key appears in `rhs` under `key_right`.
+     */
+    template <class Rng, class KeyLeft, class KeyRight>
+    [[nodiscard]] materialized_range<typename std::vector<value_type>::iterator, std::vector<value_type>> intersect_by(
+        Rng const& rhs, KeyLeft&& key_left, KeyRight&& key_right) const;
+
+    /**
+     * @brief Set union by key (C# `Enumerable.UnionBy`): elements from this sequence, then from `rhs`, each key once;
+     *        first-seen order from the left, then first-seen new keys from the right. Same `value_type` on both sides.
+     */
+    template <class Rng, class KeyLeft, class KeyRight>
+    [[nodiscard]] materialized_range<typename std::vector<value_type>::iterator, std::vector<value_type>> union_by(
+        Rng const& rhs, KeyLeft&& key_left, KeyRight&& key_right) const;
+
+    /**
+     * @brief Counts by key; yields `(key, count)` pairs in **first encounter order** of each key (C# `CountBy`).
+     * @details One full pass; keys are stored in `std::unordered_set` / map-style buckets — keys must be hashable.
+     */
+    template <class KeyFn>
+    [[nodiscard]] auto count_by(KeyFn&& keyf) const -> materialized_range<
+        typename std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, int>>::iterator,
+        std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, int>>>;
+
     /** @brief Last `n` elements (ring buffer; full scan). */
     [[nodiscard]] materialized_range<typename std::vector<value_type>::iterator, std::vector<value_type>> take_last(
         std::size_t n) const;
@@ -1088,6 +1167,16 @@ public:
     {
         return select_view<iterator, std::decay_t<F>>(
             derived().begin(), derived().end(), std::forward<F>(f));
+    }
+
+    /**
+     * @brief `Select` with zero-based index: `f(element, index)` per element (lazy; built on `enumerate`).
+     * @details Order matches C# `Select((x, i) => …)` — value first, then index.
+     */
+    template <class F>
+    [[nodiscard]] auto select_indexed(F&& f) const
+    {
+        return enumerate().select([fn = std::forward<F>(f)](auto const& p) { return fn(p.second, p.first); });
     }
 
     /**
@@ -1109,6 +1198,17 @@ public:
     {
         return where_view<iterator, std::decay_t<P>>(
             derived().begin(), derived().end(), std::forward<P>(pred));
+    }
+
+    /**
+     * @brief `Where` with index: `pred(element, index)` (lazy; `enumerate` + filter + re-project to element).
+     */
+    template <class P>
+    [[nodiscard]] auto where_indexed(P&& pred) const
+    {
+        return enumerate()
+            .where([pr = std::forward<P>(pred)](auto const& p) { return pr(p.second, p.first); })
+            .select([](auto const& p) -> decltype((p.second)) { return p.second; });
     }
 
     /** @brief Pointer sequence: keeps elements where `dynamic_cast` to `U*` succeeds (LINQ `OfType`). */
@@ -2570,6 +2670,7 @@ struct iterator_traits<::qb::linq::reverse_iterator<Iterator>> {
  * | `repeat_iterator` / `repeat_view` | `n` copies of one value |
  * | `concat_iterator` / `concat_view` | Two ranges back-to-back |
  * | `zip_iterator` / `zip_view` | Pairwise tuples until shorter side ends |
+ * | `zip3_iterator` / `zip3_view` | Three-way tuples until shortest side ends |
  * | `default_if_empty_iterator` / `default_if_empty_view` | Default value if source empty |
  * | `distinct_iterator` / `distinct_view` | First occurrence per key (hash set) |
  * | `enumerate_iterator` / `enumerate_view` | `(index, element)` |
@@ -3020,6 +3121,101 @@ public:
     }
     /** @brief Canonical end `(a1_, b1_, a1_, b1_)`. */
     [[nodiscard]] zip_iterator<It1, It2> end() const { return {a1_, b1_, a1_, b1_}; }
+};
+
+// ---------------------------------------------------------------------------
+// zip3_view — three sequences in lockstep
+// ---------------------------------------------------------------------------
+
+/**
+ * @ingroup linq
+ * @brief Triple zip: advances three cursors; canonical end when any leg exhausts.
+ */
+template <class It1, class It2, class It3>
+class zip3_iterator {
+    It1 a_{};
+    It2 b_{};
+    It3 c_{};
+    It1 ae_{};
+    It2 be_{};
+    It3 ce_{};
+
+public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = std::tuple<typename std::iterator_traits<It1>::value_type,
+        typename std::iterator_traits<It2>::value_type, typename std::iterator_traits<It3>::value_type>;
+    using difference_type = std::ptrdiff_t;
+    using pointer = void;
+    using reference = std::tuple<typename std::iterator_traits<It1>::reference,
+        typename std::iterator_traits<It2>::reference, typename std::iterator_traits<It3>::reference>;
+
+    zip3_iterator() = default;
+
+    zip3_iterator(It1 a, It2 b, It3 c, It1 ae, It2 be, It3 ce)
+        : a_(std::move(a)), b_(std::move(b)), c_(std::move(c)), ae_(std::move(ae)), be_(std::move(be)), ce_(std::move(ce))
+    {}
+
+    [[nodiscard]] reference operator*() const { return reference{*a_, *b_, *c_}; }
+
+    zip3_iterator& operator++()
+    {
+        if (a_ == ae_ && b_ == be_ && c_ == ce_)
+            return *this;
+        if (a_ != ae_)
+            ++a_;
+        if (b_ != be_)
+            ++b_;
+        if (c_ != ce_)
+            ++c_;
+        if (a_ == ae_ || b_ == be_ || c_ == ce_) {
+            a_ = ae_;
+            b_ = be_;
+            c_ = ce_;
+        }
+        return *this;
+    }
+
+    zip3_iterator operator++(int)
+    {
+        auto t = *this;
+        ++*this;
+        return t;
+    }
+
+    [[nodiscard]] friend bool operator==(zip3_iterator const& x, zip3_iterator const& y) noexcept
+    {
+        return x.a_ == y.a_ && x.b_ == y.b_ && x.c_ == y.c_;
+    }
+    [[nodiscard]] friend bool operator!=(zip3_iterator const& x, zip3_iterator const& y) noexcept
+    {
+        return !(x == y);
+    }
+};
+
+/**
+ * @ingroup linq
+ * @brief Lazy zip of three ranges.
+ */
+template <class It1, class It2, class It3>
+class zip3_view : public query_range_algorithms<zip3_view<It1, It2, It3>, zip3_iterator<It1, It2, It3>> {
+    It1 a0_{}, a1_{};
+    It2 b0_{}, b1_{};
+    It3 c0_{}, c1_{};
+
+public:
+    zip3_view(It1 ab, It1 ae, It2 bb, It2 be, It3 cb, It3 ce)
+        : a0_(std::move(ab)), a1_(std::move(ae)), b0_(std::move(bb)), b1_(std::move(be)), c0_(std::move(cb)),
+          c1_(std::move(ce))
+    {}
+
+    [[nodiscard]] zip3_iterator<It1, It2, It3> begin() const
+    {
+        if (a0_ == a1_ || b0_ == b1_ || c0_ == c1_)
+            return {a1_, b1_, c1_, a1_, b1_, c1_};
+        return {a0_, b0_, c0_, a1_, b1_, c1_};
+    }
+
+    [[nodiscard]] zip3_iterator<It1, It2, It3> end() const { return {a1_, b1_, c1_, a1_, b1_, c1_}; }
 };
 
 // ---------------------------------------------------------------------------
@@ -3765,6 +3961,18 @@ query_range_algorithms<Derived, Iter>::zip(Rng const& rhs) const
         derived().begin(), derived().end(), rhs.begin(), rhs.end());
 }
 
+/** @brief Out-of-line `zip` (three ranges): shortest length wins. */
+template <class Derived, class Iter>
+template <class Rng2, class Rng3>
+zip3_view<typename query_range_algorithms<Derived, Iter>::iterator,
+    decltype(std::declval<Rng2 const&>().begin()), decltype(std::declval<Rng3 const&>().begin())>
+query_range_algorithms<Derived, Iter>::zip(Rng2 const& r2, Rng3 const& r3) const
+{
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    return zip3_view<iterator_t, decltype(r2.begin()), decltype(r3.begin())>(derived().begin(), derived().end(),
+        r2.begin(), r2.end(), r3.begin(), r3.end());
+}
+
 /** @brief Out-of-line `default_if_empty`: one `def` when `derived()` is empty. */
 template <class Derived, class Iter>
 auto query_range_algorithms<Derived, Iter>::default_if_empty(value_type def) const
@@ -4357,8 +4565,8 @@ private:
 /**
  * @namespace qb::linq::detail
  * @ingroup linq
- * @brief Template definitions below: `group_by`, `order_by`, container materializers, `join` / `group_join`,
- *        set-like ops. Declarations live in `query_range.h`.
+ * @brief Template definitions below: `group_by`, `order_by`, container materializers, `join` / `left_join` /
+ *        `right_join` / `group_join`, set-like ops. Declarations live in `query_range.h`.
  */
 namespace detail {
 
@@ -4523,6 +4731,136 @@ query_range_algorithms<Derived, Iter>::intersect(Rng const& rhs) const
     return wrap_materialized(std::move(owner));
 }
 
+/** @brief Out-of-line `except_by`: distinct left elements by key, excluding keys present on the right. */
+template <class Derived, class Iter>
+template <class Rng, class KeyLeft, class KeyRight>
+materialized_range<typename std::vector<typename query_range_algorithms<Derived, Iter>::value_type>::iterator,
+    std::vector<typename query_range_algorithms<Derived, Iter>::value_type>>
+query_range_algorithms<Derived, Iter>::except_by(
+    Rng const& rhs, KeyLeft&& key_left, KeyRight&& key_right) const
+{
+    using val_t = typename query_range_algorithms<Derived, Iter>::value_type;
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    using ref_l = typename query_range_algorithms<Derived, Iter>::reference;
+    using rri = decltype(rhs.begin());
+    using ref_r = decltype(*std::declval<rri>());
+    using K = std::decay_t<std::invoke_result_t<KeyLeft&, ref_l>>;
+    static_assert(std::is_same_v<K, std::decay_t<std::invoke_result_t<KeyRight&, ref_r>>>,
+        "qb::linq::except_by: key types from left and right selectors must match");
+    std::unordered_set<K> ban;
+    reserve_if_random_access(ban, rhs.begin(), rhs.end());
+    for (auto it = rhs.begin(); it != rhs.end(); ++it)
+        ban.insert(key_right(*it));
+    std::unordered_set<K> yielded_keys;
+    auto owner = std::make_shared<std::vector<val_t>>();
+    reserve_if_random_access(*owner, derived().begin(), derived().end());
+    for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
+        K const k = key_left(*it);
+        if (ban.find(k) == ban.end() && yielded_keys.insert(k).second)
+            owner->push_back(*it);
+    }
+    return wrap_materialized(std::move(owner));
+}
+
+/** @brief Out-of-line `intersect_by`: distinct left elements by key whose key appears on the right. */
+template <class Derived, class Iter>
+template <class Rng, class KeyLeft, class KeyRight>
+materialized_range<typename std::vector<typename query_range_algorithms<Derived, Iter>::value_type>::iterator,
+    std::vector<typename query_range_algorithms<Derived, Iter>::value_type>>
+query_range_algorithms<Derived, Iter>::intersect_by(
+    Rng const& rhs, KeyLeft&& key_left, KeyRight&& key_right) const
+{
+    using val_t = typename query_range_algorithms<Derived, Iter>::value_type;
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    using ref_l = typename query_range_algorithms<Derived, Iter>::reference;
+    using rri = decltype(rhs.begin());
+    using ref_r = decltype(*std::declval<rri>());
+    using K = std::decay_t<std::invoke_result_t<KeyLeft&, ref_l>>;
+    static_assert(std::is_same_v<K, std::decay_t<std::invoke_result_t<KeyRight&, ref_r>>>,
+        "qb::linq::intersect_by: key types from left and right selectors must match");
+    std::unordered_set<K> want;
+    reserve_if_random_access(want, rhs.begin(), rhs.end());
+    for (auto it = rhs.begin(); it != rhs.end(); ++it)
+        want.insert(key_right(*it));
+    std::unordered_set<K> yielded_keys;
+    auto owner = std::make_shared<std::vector<val_t>>();
+    reserve_if_random_access(*owner, derived().begin(), derived().end());
+    for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
+        K const k = key_left(*it);
+        if (want.find(k) != want.end() && yielded_keys.insert(k).second)
+            owner->push_back(*it);
+    }
+    return wrap_materialized(std::move(owner));
+}
+
+/** @brief Out-of-line `union_by`: concat by unique keys (left order, then right-only keys). */
+template <class Derived, class Iter>
+template <class Rng, class KeyLeft, class KeyRight>
+materialized_range<typename std::vector<typename query_range_algorithms<Derived, Iter>::value_type>::iterator,
+    std::vector<typename query_range_algorithms<Derived, Iter>::value_type>>
+query_range_algorithms<Derived, Iter>::union_by(
+    Rng const& rhs, KeyLeft&& key_left, KeyRight&& key_right) const
+{
+    using val_t = typename query_range_algorithms<Derived, Iter>::value_type;
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    using ref_l = typename query_range_algorithms<Derived, Iter>::reference;
+    using rri = decltype(rhs.begin());
+    using ref_r = decltype(*std::declval<rri>());
+    static_assert(std::is_same_v<val_t, std::remove_cv_t<std::remove_reference_t<ref_r>>>,
+        "qb::linq::union_by requires the same element type on both sides");
+    using K = std::decay_t<std::invoke_result_t<KeyLeft&, ref_l>>;
+    static_assert(std::is_same_v<K, std::decay_t<std::invoke_result_t<KeyRight&, ref_r>>>,
+        "qb::linq::union_by: key types from left and right selectors must match");
+    std::unordered_set<K> seen;
+    auto owner = std::make_shared<std::vector<val_t>>();
+    reserve_if_random_access(*owner, derived().begin(), derived().end());
+    reserve_if_random_access(*owner, rhs.begin(), rhs.end());
+    for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
+        K const k = key_left(*it);
+        if (seen.insert(k).second)
+            owner->push_back(*it);
+    }
+    for (auto it = rhs.begin(); it != rhs.end(); ++it) {
+        K const k = key_right(*it);
+        if (seen.insert(k).second)
+            owner->push_back(*it);
+    }
+    return wrap_materialized(std::move(owner));
+}
+
+/** @brief Out-of-line `count_by`: (key, count) pairs in first-seen key order. */
+template <class Derived, class Iter>
+template <class KeyFn>
+auto query_range_algorithms<Derived, Iter>::count_by(KeyFn&& keyf) const -> materialized_range<
+    typename std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&,
+                                           typename query_range_algorithms<Derived, Iter>::reference>>,
+                                      int>>::iterator,
+    std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&,
+                                    typename query_range_algorithms<Derived, Iter>::reference>>,
+                             int>>>
+{
+    using ref = typename query_range_algorithms<Derived, Iter>::reference;
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    using K = std::decay_t<std::invoke_result_t<KeyFn&, ref>>;
+    using row_t = std::pair<K, int>;
+    using vec_t = std::vector<row_t>;
+    std::unordered_map<K, int> counts;
+    std::vector<K> order;
+    reserve_if_random_access(counts, derived().begin(), derived().end());
+    for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
+        K const k = keyf(*it);
+        auto const r = counts.try_emplace(k, 0);
+        if (r.second)
+            order.push_back(k);
+        ++r.first->second;
+    }
+    auto owner = std::make_shared<vec_t>();
+    owner->reserve(order.size());
+    for (K const& k : order)
+        owner->emplace_back(k, counts.find(k)->second);
+    return wrap_materialized(std::move(owner));
+}
+
 /** @brief Out-of-line `take_last`: tail `n` elements (random-access → copy only `min(n,len)` items). */
 template <class Derived, class Iter>
 materialized_range<typename std::vector<typename query_range_algorithms<Derived, Iter>::value_type>::iterator,
@@ -4669,6 +5007,82 @@ auto query_range_algorithms<Derived, Iter>::group_join(
     return wrap_materialized(std::move(owner));
 }
 
+/** @brief Out-of-line `left_join`: like `join`, plus one `nullopt` inner per unmatched outer. */
+template <class Derived, class Iter>
+template <class Rng, class OuterKey, class InnerKey, class ResultSel>
+auto query_range_algorithms<Derived, Iter>::left_join(Rng const& inner, OuterKey&& outer_key,
+    InnerKey&& inner_key, ResultSel&& result) const
+{
+    using ref_t = typename query_range_algorithms<Derived, Iter>::reference;
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    using inner_iter = decltype(inner.begin());
+    using inner_ref_t = iter_reference_t<inner_iter>;
+    using K = std::decay_t<std::invoke_result_t<OuterKey&, ref_t>>;
+    static_assert(std::is_same_v<K, std::decay_t<std::invoke_result_t<InnerKey&, inner_ref_t>>>,
+        "qb::linq::left_join: outer and inner key types must match");
+    using InnerVal = std::decay_t<inner_ref_t>;
+    using Row = std::decay_t<std::invoke_result_t<ResultSel&, ref_t, std::optional<InnerVal> const&>>;
+    std::unordered_multimap<K, InnerVal> map;
+    reserve_if_random_access(map, inner.begin(), inner.end());
+    for (inner_iter it = inner.begin(); it != inner.end(); ++it)
+        map.emplace(inner_key(*it), InnerVal(*it));
+    auto owner = std::make_shared<std::vector<Row>>();
+    reserve_if_random_access(*owner, derived().begin(), derived().end());
+    for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
+        K const k = outer_key(*it);
+        auto r = map.equal_range(k);
+        if (r.first == r.second) {
+            std::optional<InnerVal> const empty{};
+            owner->push_back(result(*it, empty));
+        } else {
+            for (auto in = r.first; in != r.second; ++in) {
+                std::optional<InnerVal> const mo{in->second};
+                owner->push_back(result(*it, mo));
+            }
+        }
+    }
+    return wrap_materialized(std::move(owner));
+}
+
+/** @brief Out-of-line `right_join`: index outer (`*this`); emit every inner, optional outer when unmatched. */
+template <class Derived, class Iter>
+template <class Rng, class OuterKey, class InnerKey, class ResultSel>
+auto query_range_algorithms<Derived, Iter>::right_join(Rng const& inner, OuterKey&& outer_key,
+    InnerKey&& inner_key, ResultSel&& result) const
+{
+    using ref_t = typename query_range_algorithms<Derived, Iter>::reference;
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    using val_t = typename query_range_algorithms<Derived, Iter>::value_type;
+    using inner_iter = decltype(inner.begin());
+    using inner_ref_t = iter_reference_t<inner_iter>;
+    using K = std::decay_t<std::invoke_result_t<OuterKey&, ref_t>>;
+    static_assert(std::is_same_v<K, std::decay_t<std::invoke_result_t<InnerKey&, inner_ref_t>>>,
+        "qb::linq::right_join: outer and inner key types must match");
+    using InnerVal = std::decay_t<inner_ref_t>;
+    using Row = std::decay_t<std::invoke_result_t<ResultSel&, std::optional<val_t> const&, InnerVal const&>>;
+    std::unordered_multimap<K, val_t> map;
+    reserve_if_random_access(map, derived().begin(), derived().end());
+    for (iterator_t it = derived().begin(); it != derived().end(); ++it)
+        map.emplace(outer_key(*it), static_cast<val_t>(*it));
+    auto owner = std::make_shared<std::vector<Row>>();
+    reserve_if_random_access(*owner, inner.begin(), inner.end());
+    for (inner_iter it = inner.begin(); it != inner.end(); ++it) {
+        InnerVal const inner_val(*it);
+        K const k = inner_key(*it);
+        auto r = map.equal_range(k);
+        if (r.first == r.second) {
+            std::optional<val_t> const empty{};
+            owner->push_back(result(empty, inner_val));
+        } else {
+            for (auto out = r.first; out != r.second; ++out) {
+                std::optional<val_t> const mo{out->second};
+                owner->push_back(result(mo, inner_val));
+            }
+        }
+    }
+    return wrap_materialized(std::move(owner));
+}
+
 /** @brief Out-of-line `to_unordered_set`: unique elements in unspecified order. */
 template <class Derived, class Iter>
 auto query_range_algorithms<Derived, Iter>::to_unordered_set() const
@@ -4732,14 +5146,16 @@ namespace qb::linq {
  *         algorithms from `query_range_algorithms` or `materialized_range` extras).
  *
  * @par Lazy operations
- * `select`, `select_many`, `where`, `of_type`, `skip`, `skip_while`, `take`, `take_while`, `skip_last`,
- * `take_last`, `reverse`, `concat`, `zip`, `default_if_empty`, `enumerate`, `scan`, `chunk`, `stride`,
- * `distinct`, `distinct_by`, `union_with`, `join`, `group_join`, `to_lookup`, `group_by`, `order_by`,
- * `except`, `intersect`, map/set materializers, `append`, `prepend`.
+ * `select`, `select_indexed`, `select_many`, `where`, `where_indexed`, `of_type`, `skip`, `skip_while`, `take`,
+ * `take_while`, `skip_last`, `take_last`, `reverse`, `concat`, `zip` (two or three ranges), `default_if_empty`,
+ * `enumerate`, `scan`, `chunk`, `stride`, `distinct`, `distinct_by`, `union_with`, `union_by`, `join`,
+ * `left_join`, `right_join`, `group_join`, `to_lookup`, `group_by`, `order_by`, `except`, `intersect`,
+ * `except_by`, `intersect_by`, `count_by`, map/set materializers, `append`, `prepend`.
  *
  * @par Terminals (eager)
  * `first`/`last`/`single` families, `element_at`, `contains`, `index_of`, `sequence_equal`, `count`,
- * `any`/`all_if`/`none_if`, `sum`/`average`/min/max/`min_max`/`min_by`/`max_by`, `aggregate`/`fold`/`reduce`,
+ * `try_get_non_enumerated_count`, `any`/`all_if`/`none_if`, `sum`/`average`/min/max/`min_max`/`min_by`/`max_by`,
+ * `aggregate`/`fold`/`reduce`,
  * percentiles, variance, `std_dev`, `each`, `to_vector`/`materialize`, `operator[]` when supported.
  *
  * @par Related
@@ -4899,6 +5315,13 @@ public:
         return pipe(static_cast<Handle const&>(*this).zip(rhs));
     }
 
+    /** @brief Zip three sequences; stops at shortest length (`std::tuple` of references per step). */
+    template <class Rng2, class Rng3>
+    [[nodiscard]] auto zip(Rng2 const& r2, Rng3 const& r3) const
+    {
+        return pipe(static_cast<Handle const&>(*this).zip(r2, r3));
+    }
+
     /** @brief Single-pass fold over pairs with `rhs` (shorter length wins); prefer over `zip().select(...).aggregate(...)`. */
     template <class Rng, class Acc, class F>
     [[nodiscard]] std::decay_t<Acc> zip_fold(Rng const& rhs, Acc&& init, F&& f) const
@@ -4951,6 +5374,24 @@ public:
     {
         return pipe(static_cast<Handle const&>(*this).group_join(
             inner, std::forward<OuterKey>(ok), std::forward<InnerKey>(ik)));
+    }
+
+    /** @brief Left outer join: `result(outer, inner_optional)` with empty `optional` when no match. */
+    template <class Rng, class OuterKey, class InnerKey, class ResultSel>
+    [[nodiscard]] auto left_join(
+        Rng const& inner, OuterKey&& ok, InnerKey&& ik, ResultSel&& rs) const
+    {
+        return pipe(static_cast<Handle const&>(*this).left_join(inner, std::forward<OuterKey>(ok),
+            std::forward<InnerKey>(ik), std::forward<ResultSel>(rs)));
+    }
+
+    /** @brief Right outer join: `result(outer_optional, inner)` with empty `optional` when no outer match. */
+    template <class Rng, class OuterKey, class InnerKey, class ResultSel>
+    [[nodiscard]] auto right_join(
+        Rng const& inner, OuterKey&& ok, InnerKey&& ik, ResultSel&& rs) const
+    {
+        return pipe(static_cast<Handle const&>(*this).right_join(inner, std::forward<OuterKey>(ok),
+            std::forward<InnerKey>(ik), std::forward<ResultSel>(rs)));
     }
 
     /** @brief Same as `group_by(key)` (LINQ `ToLookup`). */
@@ -5069,6 +5510,37 @@ public:
     {
         return pipe(static_cast<Handle const&>(*this).intersect(rhs));
     }
+
+    /** @brief `Except` by key (LINQ `ExceptBy`). */
+    template <class Rng, class KeyLeft, class KeyRight>
+    [[nodiscard]] auto except_by(Rng const& rhs, KeyLeft&& kl, KeyRight&& kr) const
+    {
+        return pipe(static_cast<Handle const&>(*this).except_by(
+            rhs, std::forward<KeyLeft>(kl), std::forward<KeyRight>(kr)));
+    }
+
+    /** @brief `Intersect` by key (LINQ `IntersectBy`). */
+    template <class Rng, class KeyLeft, class KeyRight>
+    [[nodiscard]] auto intersect_by(Rng const& rhs, KeyLeft&& kl, KeyRight&& kr) const
+    {
+        return pipe(static_cast<Handle const&>(*this).intersect_by(
+            rhs, std::forward<KeyLeft>(kl), std::forward<KeyRight>(kr)));
+    }
+
+    /** @brief `Union` by key (LINQ `UnionBy`); same `value_type` on both sides. */
+    template <class Rng, class KeyLeft, class KeyRight>
+    [[nodiscard]] auto union_by(Rng const& rhs, KeyLeft&& kl, KeyRight&& kr) const
+    {
+        return pipe(static_cast<Handle const&>(*this).union_by(
+            rhs, std::forward<KeyLeft>(kl), std::forward<KeyRight>(kr)));
+    }
+
+    /** @brief Count per key, pairs in first-seen key order (LINQ `CountBy`). */
+    template <class KeyFn>
+    [[nodiscard]] auto count_by(KeyFn&& keyf) const
+    {
+        return pipe(static_cast<Handle const&>(*this).count_by(std::forward<KeyFn>(keyf)));
+    }
     /** @} */
 
     /** @name Tail / slice */
@@ -5101,6 +5573,13 @@ public:
         return pipe(static_cast<Handle const&>(*this).select(std::forward<F>(f)));
     }
 
+    /** @brief `Select` with index: `f(element, index)` (LINQ indexed overload). */
+    template <class F>
+    [[nodiscard]] auto select_indexed(F&& f) const
+    {
+        return pipe(static_cast<Handle const&>(*this).select_indexed(std::forward<F>(f)));
+    }
+
     /** @brief Tuple of projections per element — not C# `SelectMany` flattening (see `@ref linq`). */
     template <class... Fs>
     [[nodiscard]] auto select_many(Fs&&... fs) const
@@ -5113,6 +5592,13 @@ public:
     [[nodiscard]] auto where(P&& p) const
     {
         return pipe(static_cast<Handle const&>(*this).where(std::forward<P>(p)));
+    }
+
+    /** @brief `Where` with index: `pred(element, index)`. */
+    template <class P>
+    [[nodiscard]] auto where_indexed(P&& p) const
+    {
+        return pipe(static_cast<Handle const&>(*this).where_indexed(std::forward<P>(p)));
     }
 
     /** @brief `dynamic_cast` filter for polymorphic pointer sequences (LINQ `OfType`). */
@@ -5247,6 +5733,12 @@ public:
 
     /** @brief Element count (`std::distance`; LINQ `Count`). */
     [[nodiscard]] std::size_t count() const { return static_cast<Handle const&>(*this).count(); }
+
+    /** @brief O(1) size for random-access ranges only; otherwise `nullopt` (LINQ-style non-enumerated count). */
+    [[nodiscard]] std::optional<std::size_t> try_get_non_enumerated_count() const
+    {
+        return static_cast<Handle const&>(*this).try_get_non_enumerated_count();
+    }
     /** @} */
 
     /** @name Materialization */

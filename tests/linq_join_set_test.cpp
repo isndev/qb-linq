@@ -2,6 +2,7 @@
 /// @brief Relational-style join / group_join and set-style operations (`union_with`, `except`, `intersect`).
 
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -177,4 +178,113 @@ TEST(ExceptIntersect, DuplicatesOnBothSidesVsSortedSetReference)
 
     EXPECT_EQ(sort_e, want_e);
     EXPECT_EQ(sort_i, want_i);
+}
+
+TEST(LeftJoin, UnmatchedOuterYieldsEmptyOptional)
+{
+    std::vector<Person> const people{{1, "Ann"}, {2, "Bob"}, {3, "Cam"}};
+    std::vector<Score> const scores{{1, 10}, {2, 20}};
+    auto rows = qb::linq::from(people)
+                    .left_join(scores,
+                        [](Person const& p) { return p.id; },
+                        [](Score const& s) { return s.person_id; },
+                        [](Person const& p, std::optional<Score> const& os) {
+                            return std::make_tuple(p.name, os ? os->points : -1);
+                        });
+    ASSERT_EQ(rows.count(), 3u);
+    auto it = rows.begin();
+    EXPECT_EQ(std::get<0>(*it), "Ann");
+    EXPECT_EQ(std::get<1>(*it), 10);
+    ++it;
+    EXPECT_EQ(std::get<0>(*it), "Bob");
+    EXPECT_EQ(std::get<1>(*it), 20);
+    ++it;
+    EXPECT_EQ(std::get<0>(*it), "Cam");
+    EXPECT_EQ(std::get<1>(*it), -1);
+}
+
+TEST(LeftJoin, MultipleInnersMatchesInnerJoinRowCount)
+{
+    std::vector<Person> const people{{1, "Ann"}, {2, "Bob"}};
+    std::vector<Score> const scores{{1, 5}, {1, 7}, {2, 3}};
+    auto inner_n = qb::linq::from(people)
+                       .join(scores,
+                           [](Person const& p) { return p.id; },
+                           [](Score const& s) { return s.person_id; },
+                           [](Person const&, Score const& s) { return s.points; })
+                       .long_count();
+    auto left_n = qb::linq::from(people)
+                      .left_join(scores,
+                          [](Person const& p) { return p.id; },
+                          [](Score const& s) { return s.person_id; },
+                          [](Person const&, std::optional<Score> const& os) { return os->points; })
+                      .long_count();
+    EXPECT_EQ(left_n, inner_n);
+    EXPECT_EQ(left_n, 3u);
+}
+
+TEST(LeftJoin, EmptyInnerRangeOneRowPerOuter)
+{
+    std::vector<Person> const people{{1, "Ann"}};
+    std::vector<Score> const scores{};
+    auto rows = qb::linq::from(people)
+                    .left_join(scores,
+                        [](Person const& p) { return p.id; },
+                        [](Score const& s) { return s.person_id; },
+                        [](Person const& p, std::optional<Score> const& os) {
+                            return std::make_pair(p.id, os.has_value());
+                        });
+    ASSERT_EQ(rows.count(), 1u);
+    EXPECT_FALSE(rows.begin()->second);
+}
+
+TEST(RightJoin, UnmatchedInnerYieldsEmptyOptionalOuter)
+{
+    std::vector<Person> const people{{1, "Ann"}, {2, "Bob"}};
+    std::vector<Score> const scores{{1, 10}, {2, 20}, {99, 1}};
+    auto rows = qb::linq::from(people)
+                    .right_join(scores,
+                        [](Person const& p) { return p.id; },
+                        [](Score const& s) { return s.person_id; },
+                        [](std::optional<Person> const& op, Score const& s) {
+                            return std::make_tuple(s.person_id, s.points, op.has_value());
+                        });
+    ASSERT_EQ(rows.count(), 3u);
+    auto it = rows.begin();
+    EXPECT_TRUE(std::get<2>(*it));
+    ++it;
+    EXPECT_TRUE(std::get<2>(*it));
+    ++it;
+    EXPECT_EQ(std::get<0>(*it), 99);
+    EXPECT_FALSE(std::get<2>(*it));
+}
+
+TEST(RightJoin, MultipleOutersDuplicatesInnerKey)
+{
+    std::vector<Person> const people{{1, "Ann"}, {1, "AnnDup"}};
+    std::vector<Score> const scores{{1, 100}};
+    auto rows = qb::linq::from(people)
+                    .right_join(scores,
+                        [](Person const& p) { return p.id; },
+                        [](Score const& s) { return s.person_id; },
+                        [](std::optional<Person> const& op, Score const& s) {
+                            return std::make_pair(op->name, s.points);
+                        });
+    ASSERT_EQ(rows.count(), 2u);
+}
+
+TEST(RightJoin, EmptyOuterAllInnersUnmatched)
+{
+    std::vector<Person> const people{};
+    std::vector<Score> const scores{{7, 1}};
+    auto rows = qb::linq::from(people)
+                    .right_join(scores,
+                        [](Person const& p) { return p.id; },
+                        [](Score const& s) { return s.person_id; },
+                        [](std::optional<Person> const& op, Score const& s) {
+                            return std::make_pair(op.has_value(), s.points);
+                        });
+    ASSERT_EQ(rows.count(), 1u);
+    EXPECT_FALSE(rows.begin()->first);
+    EXPECT_EQ(rows.begin()->second, 1);
 }

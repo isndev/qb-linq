@@ -1,9 +1,11 @@
 /// @file linq_surfaces_test.cpp
 /// @brief High-value API surfaces that are easy to regress: custom comparators, take edge cases,
-///        zip stability, join empty result, default_if_empty(), percentile_by empty.
+///        zip stability, join empty result, default_if_empty(), percentile_by empty, try_get / left_join / count_by.
 
 #include <cmath>
 #include <limits>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -89,4 +91,46 @@ TEST(SurfaceAggregate, EmptyReturnsSeed)
     std::vector<int> const empty;
     int const out = qb::linq::from(empty).aggregate(42, [](int acc, int x) { return acc + x; });
     EXPECT_EQ(out, 42);
+}
+
+TEST(SurfaceTryGetNonEnumeratedCount, VectorPipelineExposesSize)
+{
+    std::vector<int> const v{1, 2, 3, 4};
+    auto const n = qb::linq::from(v).try_get_non_enumerated_count();
+    ASSERT_TRUE(n.has_value());
+    EXPECT_EQ(*n, 4u);
+}
+
+struct SurfacePerson {
+    int id{};
+    std::string name;
+};
+struct SurfaceScore {
+    int person_id{};
+    int points{};
+};
+
+TEST(SurfaceLeftJoin, UnmatchedYieldsEmptyOptionalInResult)
+{
+    std::vector<SurfacePerson> const people{{1, "A"}, {2, "B"}};
+    std::vector<SurfaceScore> const scores{{1, 10}};
+    auto row = qb::linq::from(people)
+                   .left_join(scores,
+                       [](SurfacePerson const& p) { return p.id; },
+                       [](SurfaceScore const& s) { return s.person_id; },
+                       [](SurfacePerson const& p, std::optional<SurfaceScore> const& os) {
+                           return std::make_pair(p.name, os ? os->points : -1);
+                       })
+                   .last();
+    EXPECT_EQ(row.first, "B");
+    EXPECT_EQ(row.second, -1);
+}
+
+TEST(SurfaceCountBy, SingleDistinctKey)
+{
+    std::vector<int> const v{7, 7, 7};
+    auto r = qb::linq::from(v).count_by([](int x) { return x; });
+    ASSERT_EQ(r.count(), 1u);
+    EXPECT_EQ(r.begin()->first, 7);
+    EXPECT_EQ(r.begin()->second, 3);
 }

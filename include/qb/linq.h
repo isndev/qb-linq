@@ -30,9 +30,11 @@
  *   `where_view` can be O(1) to construct and pay `find_if` only on the first `begin()` (cached).
  * - **Fused terminals** (`sum_if`, `count_if`, `any_if`, `all_if`, `aggregate`/`fold`) fold in **one pass**
  *   without a `where_iterator` chain — prefer them on hot paths when you only need the aggregate.
- * - **Extra views** (`concat`, `zip`, `scan`, `chunk`, `stride`, `distinct`, `default_if_empty`, `enumerate`,
- *   `append`/`prepend`), `of_type<U>`, and set-style helpers (`except`, `intersect`, `union_with`, `join`,
- *   `group_join`, `to_lookup`) live in `qb/linq/detail/extra_views.h` and `qb/linq/query.h`.
+ * - **Extra views** (`concat`, `zip` / `zip`×3, `scan`, `chunk`, `stride`, `distinct`, `default_if_empty`,
+ *   `enumerate`, `append`/`prepend`), `of_type<U>`, and set-style helpers (`except`, `intersect`, `except_by`,
+ *   `intersect_by`, `union_with`, `union_by`, `count_by`, `join`, `left_join`, `right_join`, `group_join`,
+ *   `to_lookup`) live in
+ *   `qb/linq/detail/extra_views.h` and `qb/linq/query.h`.
  * - **Factories:** `qb::linq::empty<T>()`, `once`, `repeat`, `from`, `as_enumerable`, `iota`.
  * - **Materializing:** `take_last`/`skip_last`, `to_map`, `to_unordered_map`, `to_dictionary`, `to_set`/
  *   `to_unordered_set`.
@@ -47,14 +49,15 @@
  * - **`select_many`** does **not** flatten nested sequences like C# `SelectMany`. It yields a **tuple** of
  *   projections per element (one value per loader). Use `select` + `concat` / nested loops for true
  *   flattening.
+ * - **`left_join`** / **`right_join`** pass **`std::optional`** (by `const` reference) for the side that may be
+ *   missing; the result selector must accept that shape (see README relational table).
  * - Terminals such as `first()`, `last()`, `element_at()`, `single()` may return **`reference`** (via
  *   `decltype(auto)` through `enumerable`). Do not store those references past iterator invalidation —
  *   same rules as holding references into a live container or a `select` projection.
  * - **`sum` / `sum_if`** require `value_type` to be default-constructible and to support `operator+=`.
- * - **`except` / `intersect`** match **.NET `Enumerable.Except` / `Enumerable.Intersect`**: results contain each
- *   **distinct** `value_type` at most once, in **first-seen order** of the left sequence. They build
- *   `std::unordered_set<value_type>` for the right-hand membership set (and for deduplicating the left); elements
- *   must be **hashable** and equality-comparable as `std::unordered_set` requires.
+ * - **`except` / `intersect`** (and **`except_by` / `intersect_by` / `union_by`**) follow **.NET**-style set semantics
+ *   on values or **keys**: at most one output per distinct value or key, **first-seen** order as documented on each
+ *   API. They use **`std::unordered_set` / `unordered_map`**; value or key types must be **hashable** where required.
  * - **`zip` / `concat`** store nested iterators that may be **copy-assigned** during iteration. Functors
  *   inside the inner range (e.g. `where` / `select` on the RHS) must be **copy-assignable** — use stateless
  *   lambdas decayed to function pointers (`+[](…){…}`) or named function objects when composing pipelines
