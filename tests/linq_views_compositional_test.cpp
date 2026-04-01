@@ -71,6 +71,24 @@ TEST(ViewsScan, RunningTotalsMatchPartialSums)
     EXPECT_EQ(got, expect);
 }
 
+TEST(ViewsZipScanSelect, RunningTotalsOfPairSums)
+{
+    std::vector<int> const a{1, 2, 3, 4, 5, 6};
+    std::vector<int> const b{10, 20, 30, 40, 50, 60};
+    auto out = qb::linq::from(a)
+                   .zip(b)
+                   .select([](auto const& p) { return p.first + p.second; })
+                   .scan(0, [](int acc, int x) { return acc + x; })
+                   .to_vector();
+    std::vector<int> ref;
+    int acc = 0;
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        acc += a[i] + b[i];
+        ref.push_back(acc);
+    }
+    EXPECT_TRUE(qb::linq::from(out).sequence_equal(ref));
+}
+
 TEST(ViewsScan, EmptyYieldsNoOutput)
 {
     std::vector<int> const empty;

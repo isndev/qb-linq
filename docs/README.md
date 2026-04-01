@@ -7,7 +7,7 @@ This folder holds **project guides** and **Doxygen** assets. The main user-facin
 | **[`BUILDING.md`](BUILDING.md)** | Developers | CMake options, presets, targets (`qb_linq_tests`, `qb_linq_benchmark`, `qb_linq_docs`), FetchContent deps |
 | **[`VERSIONING.md`](VERSIONING.md)** | Maintainers / users | SemVer, `version.h`, `find_package`, releases |
 | **[`LLM_CONTEXT.md`](LLM_CONTEXT.md)** | Agents / advanced contributors | Implementation map: headers, CRTP, out-of-line split, contracts |
-| **Doxygen** (`Doxyfile.in`, `doxygen/`) | Everyone | HTML API reference: `cmake --preset docs` or `-DQB_LINQ_BUILD_DOCS=ON`, target **`qb_linq_docs`** → `${CMAKE_BINARY_DIR}/doc_doxygen/html`. **CI** runs a **`docs`** job (Ubuntu + Doxygen) — see **[`.github/workflows/cmake.yml`](../.github/workflows/cmake.yml)**. |
+| **Doxygen** (`Doxyfile.in`, `doxygen/`) | Everyone | HTML API reference: `cmake --preset docs` or `-DQB_LINQ_BUILD_DOCS=ON`, target **`qb_linq_docs`** → `${CMAKE_BINARY_DIR}/doc_doxygen/html`. **CI** runs **`docs`** (Ubuntu + Doxygen) and **`sanitize`** (Ubuntu + ASan/UBSan on tests) — see **[`.github/workflows/cmake.yml`](../.github/workflows/cmake.yml)**. |
 
 ## Repository-level files
 

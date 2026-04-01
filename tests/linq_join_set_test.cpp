@@ -1,6 +1,7 @@
 /// @file linq_join_set_test.cpp
-/// @brief Relational-style join / group_join and set union.
+/// @brief Relational-style join / group_join and set-style operations (`union_with`, `except`, `intersect`).
 
+#include <algorithm>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -118,4 +119,62 @@ TEST(Except, EmptySecondRangeNoRemoval)
     std::vector<int> const ban;
     auto out = qb::linq::from(main).except(ban).to_vector();
     EXPECT_TRUE(qb::linq::from(out).sequence_equal(main));
+}
+
+/** Matches .NET `Enumerable.Except`: distinct left values, first-seen order (duplicates on the left collapse). */
+TEST(Except, DistinctLeftFirstSeenOrder)
+{
+    std::vector<int> const main{1, 1, 2, 2, 3};
+    std::vector<int> const ban{3};
+    auto out = qb::linq::from(main).except(ban).to_vector();
+    std::vector<int> const expect{1, 2};
+    EXPECT_TRUE(qb::linq::from(out).sequence_equal(expect));
+}
+
+/** Matches .NET `Enumerable.Intersect`: distinct left values, first-seen order. */
+TEST(Intersect, DistinctLeftFirstSeenOrder)
+{
+    std::vector<int> const a{3, 3, 4, 4, 5};
+    std::vector<int> const b{3, 4, 5, 5};
+    auto out = qb::linq::from(a).intersect(b).to_vector();
+    std::vector<int> const expect{3, 4, 5};
+    EXPECT_TRUE(qb::linq::from(out).sequence_equal(expect));
+}
+
+/** Heavy duplicates on both sides; compare sorted bags to a hand-rolled set reference (GPT-style regression). */
+TEST(ExceptIntersect, DuplicatesOnBothSidesVsSortedSetReference)
+{
+    std::vector<int> const a{1, 1, 2, 2, 3, 3, 4};
+    std::vector<int> const b{3, 3, 4, 4, 5, 5};
+
+    auto got_e = qb::linq::from(a).except(b).to_vector();
+    auto got_i = qb::linq::from(a).intersect(b).to_vector();
+
+    std::vector<int> sort_e(got_e.begin(), got_e.end());
+    std::vector<int> sort_i(got_i.begin(), got_i.end());
+    std::sort(sort_e.begin(), sort_e.end());
+    std::sort(sort_i.begin(), sort_i.end());
+
+    std::vector<int> ua = a;
+    std::vector<int> ub = b;
+    std::sort(ua.begin(), ua.end());
+    std::sort(ub.begin(), ub.end());
+    ua.erase(std::unique(ua.begin(), ua.end()), ua.end());
+    ub.erase(std::unique(ub.begin(), ub.end()), ub.end());
+
+    std::vector<int> want_e;
+    std::vector<int> want_i;
+    for (int x : ua) {
+        if (!std::binary_search(ub.begin(), ub.end(), x))
+            want_e.push_back(x);
+    }
+    for (int x : ua) {
+        if (std::binary_search(ub.begin(), ub.end(), x))
+            want_i.push_back(x);
+    }
+    std::sort(want_e.begin(), want_e.end());
+    std::sort(want_i.begin(), want_i.end());
+
+    EXPECT_EQ(sort_e, want_e);
+    EXPECT_EQ(sort_i, want_i);
 }

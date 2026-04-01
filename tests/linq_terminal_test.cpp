@@ -74,6 +74,13 @@ TEST(TerminalContains, SequenceEqual)
     EXPECT_FALSE(qb::linq::from(a).contains(99));
 }
 
+TEST(TerminalContains, EmptyNeverContains)
+{
+    std::vector<int> const empty;
+    EXPECT_FALSE(qb::linq::from(empty).contains(0));
+    EXPECT_FALSE(qb::linq::from(empty).contains(0, [](int a, int b) { return a == b; }));
+}
+
 TEST(TerminalReduce, EmptyThrows)
 {
     std::vector<int> const empty;

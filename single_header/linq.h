@@ -3,8 +3,8 @@
  * @brief Single-header qb-linq (same public API as `#include <qb/linq.h>`).
  *
  * @note Do not edit by hand. Regenerate with:
- * `python scripts/amalgamate_single_header.py` or `pwsh -File scripts/amalgamate_single_header.ps1` or CMake target **qb_linq_single_header**.
- * @note Embedded version **1.2.1** from `CMakeLists.txt` `project(VERSION ...)`.
+ * `python scripts/amalgamate_single_header.py` or CMake target **qb_linq_single_header**.
+ * @note Embedded version **1.3.0** from `CMakeLists.txt` `project(VERSION ...)`.
  */
 
 #pragma once
@@ -41,13 +41,13 @@
 #define QB_LINQ_VERSION_MAJOR 1
 
 /** @brief Minor version. */
-#define QB_LINQ_VERSION_MINOR 2
+#define QB_LINQ_VERSION_MINOR 3
 
 /** @brief Patch version. */
-#define QB_LINQ_VERSION_PATCH 1
+#define QB_LINQ_VERSION_PATCH 0
 
-/** @brief Version string, e.g. `"1.2.1"`. */
-#define QB_LINQ_VERSION_STRING "1.2.1"
+/** @brief Version string, e.g. `"1.3.0"`. */
+#define QB_LINQ_VERSION_STRING "1.3.0"
 
 /**
  * @brief Integer for preprocessor comparison: `major*1'000'000 + minor*1'000 + patch` (minor/patch &lt; 1000).
@@ -1041,12 +1041,12 @@ public:
     template <class KeyFn, class ElemFn>
     [[nodiscard]] auto to_dictionary(KeyFn&& keyf, ElemFn&& elemf) const;
 
-    /** @brief Set difference using `unordered_set` of `rhs` values (`value_type` must be hashable). */
+    /** @brief Set difference vs `rhs` (C# `Enumerable.Except`): **distinct** left values not in `rhs`, first-seen order. */
     template <class Rng>
     [[nodiscard]] materialized_range<typename std::vector<value_type>::iterator, std::vector<value_type>> except(
         Rng const& rhs) const;
 
-    /** @brief Filters this sequence to elements appearing in `rhs` (hash set membership). */
+    /** @brief Set intersection with `rhs` (C# `Enumerable.Intersect`): **distinct** left values also in `rhs`, first-seen order. */
     template <class Rng>
     [[nodiscard]] materialized_range<typename std::vector<value_type>::iterator, std::vector<value_type>> intersect(
         Rng const& rhs) const;
@@ -4327,7 +4327,7 @@ query_range_algorithms<Derived, Iter>::group_by(Keys&&... keys) const
     return wrap_materialized(std::move(owner));
 }
 
-/** @brief Out-of-line `order_by`: copy to vector, `std::sort` with lexicographic key extractors. */
+/** @brief Out-of-line `order_by`: copy to vector, `std::stable_sort` with lexicographic key extractors. */
 template <class Derived, class Iter>
 template <class... KeyFilters>
 materialized_range<typename std::vector<typename query_range_algorithms<Derived, Iter>::value_type>::iterator,
@@ -4335,11 +4335,12 @@ materialized_range<typename std::vector<typename query_range_algorithms<Derived,
 query_range_algorithms<Derived, Iter>::order_by(KeyFilters&&... key_filters) const
 {
     using val_t = typename query_range_algorithms<Derived, Iter>::value_type;
-    using ref_t = typename query_range_algorithms<Derived, Iter>::reference;
     auto owner = std::make_shared<std::vector<val_t>>();
     reserve_if_random_access(*owner, derived().begin(), derived().end());
     std::copy(derived().begin(), derived().end(), std::back_inserter(*owner));
-    std::sort(owner->begin(), owner->end(), [&](ref_t a, ref_t b) {
+    // Use `val_t const&`, not `reference`: `std::stable_sort` (MSVC in particular) may call the predicate with
+    // `const` arguments; `lexicographic_compare` already takes `In const&`.
+    std::stable_sort(owner->begin(), owner->end(), [&](val_t const& a, val_t const& b) {
         return lexicographic_compare(a, b, key_filters...);
     });
     return wrap_materialized(std::move(owner));
@@ -4411,7 +4412,7 @@ auto query_range_algorithms<Derived, Iter>::to_dictionary(KeyFn&& keyf, ElemFn&&
     return wrap_materialized(std::move(owner));
 }
 
-/** @brief Out-of-line `except`: filter out values present in `rhs` (unordered set of `value_type`). */
+/** @brief Out-of-line `except`: set difference vs `rhs` (C# `Enumerable.Except`); distinct left values, first-seen order. */
 template <class Derived, class Iter>
 template <class Rng>
 materialized_range<typename std::vector<typename query_range_algorithms<Derived, Iter>::value_type>::iterator,
@@ -4424,16 +4425,18 @@ query_range_algorithms<Derived, Iter>::except(Rng const& rhs) const
     reserve_if_random_access(ban, rhs.begin(), rhs.end());
     for (auto it = rhs.begin(); it != rhs.end(); ++it)
         ban.insert(*it);
+    std::unordered_set<val_t> yielded;
     auto owner = std::make_shared<std::vector<val_t>>();
     reserve_if_random_access(*owner, derived().begin(), derived().end());
     for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
-        if (ban.find(*it) == ban.end())
-            owner->push_back(*it);
+        val_t const& v = *it;
+        if (ban.find(v) == ban.end() && yielded.insert(v).second)
+            owner->push_back(v);
     }
     return wrap_materialized(std::move(owner));
 }
 
-/** @brief Out-of-line `intersect`: keep elements also in `rhs` (order follows this sequence). */
+/** @brief Out-of-line `intersect`: set intersection (C# `Enumerable.Intersect`); distinct left values, first-seen order. */
 template <class Derived, class Iter>
 template <class Rng>
 materialized_range<typename std::vector<typename query_range_algorithms<Derived, Iter>::value_type>::iterator,
@@ -4446,11 +4449,13 @@ query_range_algorithms<Derived, Iter>::intersect(Rng const& rhs) const
     reserve_if_random_access(want, rhs.begin(), rhs.end());
     for (auto it = rhs.begin(); it != rhs.end(); ++it)
         want.insert(*it);
+    std::unordered_set<val_t> yielded;
     auto owner = std::make_shared<std::vector<val_t>>();
     reserve_if_random_access(*owner, derived().begin(), derived().end());
     for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
-        if (want.find(*it) != want.end())
-            owner->push_back(*it);
+        val_t const& v = *it;
+        if (want.find(v) != want.end() && yielded.insert(v).second)
+            owner->push_back(v);
     }
     return wrap_materialized(std::move(owner));
 }

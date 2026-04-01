@@ -1,6 +1,7 @@
 /// @file linq_relational_extended_test.cpp
 /// @brief Join / group_join edge cases, duplicate keys, empty outer.
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -72,4 +73,53 @@ TEST(RelationalIntersect, FullOverlap)
     std::vector<int> const b{3, 2, 1};
     auto out = qb::linq::from(a).intersect(b).to_vector();
     EXPECT_EQ(out.long_count(), 3u);
+}
+
+struct join_user {
+    int id = 0;
+    std::string name;
+    int team_id = 0;
+    int age = 0;
+};
+
+struct join_team {
+    int id = 0;
+    std::string name;
+};
+
+TEST(RelationalJoin, ManyCollidingKeysMatchesBruteForce)
+{
+    std::vector<join_user> users;
+    std::vector<join_team> teams;
+    for (int i = 0; i < 120; ++i) {
+        users.push_back(join_user{i, "u" + std::to_string(i), i % 17, 20 + (i % 30)});
+    }
+    for (int i = 0; i < 35; ++i) {
+        teams.push_back(join_team{i % 17, "t" + std::to_string(i)});
+    }
+
+    auto got = qb::linq::from(users)
+                   .join(
+                       teams,
+                       [](join_user const& u) { return u.team_id; },
+                       [](join_team const& t) { return t.id; },
+                       [](join_user const& u, join_team const& t) { return u.name + ":" + t.name; })
+                   .to_vector();
+
+    std::vector<std::string> want;
+    for (auto const& u : users) {
+        for (auto const& t : teams) {
+            if (u.team_id == t.id)
+                want.push_back(u.name + ":" + t.name);
+        }
+    }
+    std::vector<std::string> gs;
+    std::vector<std::string> ws;
+    for (auto const& s : got)
+        gs.push_back(s);
+    for (auto const& s : want)
+        ws.push_back(s);
+    std::sort(gs.begin(), gs.end());
+    std::sort(ws.begin(), ws.end());
+    EXPECT_EQ(gs, ws);
 }

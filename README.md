@@ -48,7 +48,7 @@
 ### Installed package
 
 ```cmake
-find_package(qb-linq 1.2 CONFIG REQUIRED)
+find_package(qb-linq 1.3 CONFIG REQUIRED)
 target_link_libraries(your_target PRIVATE qb::linq)
 target_compile_features(your_target PRIVATE cxx_std_17)
 ```
@@ -107,7 +107,7 @@ The **`qb_linq_single_header_test`** target (see **`tests/`**) keeps this file h
 1. **`enumerable<Handle>`** — fluent façade; each lazy step returns a new `enumerable`.
 2. **`query_range_algorithms` (CRTP)** — algorithms use `derived().begin()` / `end()`.
 3. **Terminals** — `sum`, `to_vector`, `first`, `order_by`, `group_by`, … trigger real work (many materialize via `shared_ptr`).
-4. **Caveats** — `select_many` = **tuple per row** (not C# flatten); `except`/`intersect` need **hashable** `value_type`; `zip`/`concat` inner pipelines may need **copy-assignable** functors (`+[](){}`); **`to_vector()`** / **`materialize()`** return an **`enumerable`** wrapping **`materialized_range`** (not a raw **`std::vector`**); **`scan`** iterators must not outlive the **`scan_view`**. Full notes in [`qb/linq.h`](include/qb/linq.h).
+4. **Caveats** — `select_many` = **tuple per row** (not C# flatten); `except`/`intersect` follow **.NET distinct set** semantics and need **hashable** `value_type`; `zip`/`concat` inner pipelines may need **copy-assignable** functors (`+[](){}`); **`to_vector()`** / **`materialize()`** return an **`enumerable`** wrapping **`materialized_range`** (not a raw **`std::vector`**); **`scan`** iterators must not outlive the **`scan_view`**. Full notes in [`qb/linq.h`](include/qb/linq.h).
 
 ---
 
@@ -120,7 +120,7 @@ Unless noted, methods are **`const`** and return a new **`enumerable`** for lazy
 
 | API | Role |
 |-----|------|
-| **`from(container&)`** / **`from(container const&)`** | Start from any iterable (`begin`/`end`). |
+| **`from(container&)`** / **`from(container const&)`** | Non-owning iterators — the **container must outlive** the pipeline for lazy ops; do not chain **`from(temp).where…`** (see **`qb/linq.h`** caveats). |
 | **`from(Iter b, Iter e)`** | Iterator pair. |
 | **`range(b, e)`** | Alias of `from(b, e)`. |
 | **`as_enumerable(...)`** | Overloads: `enumerable&` / `const&` / `&&` (identity); container ref → `from`; `(Iter b, Iter e)` → `from`. |
@@ -190,8 +190,8 @@ Unless noted, methods are **`const`** and return a new **`enumerable`** for lazy
 
 | API | Role |
 |-----|------|
-| **`except(rhs)`** | Left minus right (unordered set of RHS values). |
-| **`intersect(rhs)`** | Filter left by membership in RHS. |
+| **`except(rhs)`** | Set difference (**.NET `Except`**): distinct left values **not** in `rhs`, first-seen order. |
+| **`intersect(rhs)`** | Set intersection (**.NET `Intersect`**): distinct left values also in `rhs`, first-seen order. |
 | **`union_with(rhs)`** | `concat` + `distinct`. |
 
 ### Materialization — collections & maps

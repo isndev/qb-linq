@@ -571,7 +571,7 @@ query_range_algorithms<Derived, Iter>::group_by(Keys&&... keys) const
     return wrap_materialized(std::move(owner));
 }
 
-/** @brief Out-of-line `order_by`: copy to vector, `std::sort` with lexicographic key extractors. */
+/** @brief Out-of-line `order_by`: copy to vector, `std::stable_sort` with lexicographic key extractors. */
 template <class Derived, class Iter>
 template <class... KeyFilters>
 materialized_range<typename std::vector<typename query_range_algorithms<Derived, Iter>::value_type>::iterator,
@@ -579,11 +579,12 @@ materialized_range<typename std::vector<typename query_range_algorithms<Derived,
 query_range_algorithms<Derived, Iter>::order_by(KeyFilters&&... key_filters) const
 {
     using val_t = typename query_range_algorithms<Derived, Iter>::value_type;
-    using ref_t = typename query_range_algorithms<Derived, Iter>::reference;
     auto owner = std::make_shared<std::vector<val_t>>();
     reserve_if_random_access(*owner, derived().begin(), derived().end());
     std::copy(derived().begin(), derived().end(), std::back_inserter(*owner));
-    std::sort(owner->begin(), owner->end(), [&](ref_t a, ref_t b) {
+    // Use `val_t const&`, not `reference`: `std::stable_sort` (MSVC in particular) may call the predicate with
+    // `const` arguments; `lexicographic_compare` already takes `In const&`.
+    std::stable_sort(owner->begin(), owner->end(), [&](val_t const& a, val_t const& b) {
         return lexicographic_compare(a, b, key_filters...);
     });
     return wrap_materialized(std::move(owner));
@@ -655,7 +656,7 @@ auto query_range_algorithms<Derived, Iter>::to_dictionary(KeyFn&& keyf, ElemFn&&
     return wrap_materialized(std::move(owner));
 }
 
-/** @brief Out-of-line `except`: filter out values present in `rhs` (unordered set of `value_type`). */
+/** @brief Out-of-line `except`: set difference vs `rhs` (C# `Enumerable.Except`); distinct left values, first-seen order. */
 template <class Derived, class Iter>
 template <class Rng>
 materialized_range<typename std::vector<typename query_range_algorithms<Derived, Iter>::value_type>::iterator,
@@ -668,16 +669,18 @@ query_range_algorithms<Derived, Iter>::except(Rng const& rhs) const
     reserve_if_random_access(ban, rhs.begin(), rhs.end());
     for (auto it = rhs.begin(); it != rhs.end(); ++it)
         ban.insert(*it);
+    std::unordered_set<val_t> yielded;
     auto owner = std::make_shared<std::vector<val_t>>();
     reserve_if_random_access(*owner, derived().begin(), derived().end());
     for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
-        if (ban.find(*it) == ban.end())
-            owner->push_back(*it);
+        val_t const& v = *it;
+        if (ban.find(v) == ban.end() && yielded.insert(v).second)
+            owner->push_back(v);
     }
     return wrap_materialized(std::move(owner));
 }
 
-/** @brief Out-of-line `intersect`: keep elements also in `rhs` (order follows this sequence). */
+/** @brief Out-of-line `intersect`: set intersection (C# `Enumerable.Intersect`); distinct left values, first-seen order. */
 template <class Derived, class Iter>
 template <class Rng>
 materialized_range<typename std::vector<typename query_range_algorithms<Derived, Iter>::value_type>::iterator,
@@ -690,11 +693,13 @@ query_range_algorithms<Derived, Iter>::intersect(Rng const& rhs) const
     reserve_if_random_access(want, rhs.begin(), rhs.end());
     for (auto it = rhs.begin(); it != rhs.end(); ++it)
         want.insert(*it);
+    std::unordered_set<val_t> yielded;
     auto owner = std::make_shared<std::vector<val_t>>();
     reserve_if_random_access(*owner, derived().begin(), derived().end());
     for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
-        if (want.find(*it) != want.end())
-            owner->push_back(*it);
+        val_t const& v = *it;
+        if (want.find(v) != want.end() && yielded.insert(v).second)
+            owner->push_back(v);
     }
     return wrap_materialized(std::move(owner));
 }

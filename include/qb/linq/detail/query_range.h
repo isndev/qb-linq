@@ -452,12 +452,12 @@ public:
     template <class KeyFn, class ElemFn>
     [[nodiscard]] auto to_dictionary(KeyFn&& keyf, ElemFn&& elemf) const;
 
-    /** @brief Set difference using `unordered_set` of `rhs` values (`value_type` must be hashable). */
+    /** @brief Set difference vs `rhs` (C# `Enumerable.Except`): **distinct** left values not in `rhs`, first-seen order. */
     template <class Rng>
     [[nodiscard]] materialized_range<typename std::vector<value_type>::iterator, std::vector<value_type>> except(
         Rng const& rhs) const;
 
-    /** @brief Filters this sequence to elements appearing in `rhs` (hash set membership). */
+    /** @brief Set intersection with `rhs` (C# `Enumerable.Intersect`): **distinct** left values also in `rhs`, first-seen order. */
     template <class Rng>
     [[nodiscard]] materialized_range<typename std::vector<value_type>::iterator, std::vector<value_type>> intersect(
         Rng const& rhs) const;

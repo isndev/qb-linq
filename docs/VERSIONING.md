@@ -26,7 +26,7 @@ Versions follow **SemVer** (`MAJOR.MINOR.PATCH`):
 | Symbol | Meaning |
 |--------|---------|
 | **`QB_LINQ_VERSION_MAJOR`**, **`MINOR`**, **`PATCH`** | Preprocessor integers |
-| **`QB_LINQ_VERSION_STRING`** | String literal, e.g. `"1.2.1"` |
+| **`QB_LINQ_VERSION_STRING`** | String literal, e.g. `"1.3.0"` |
 | **`QB_LINQ_VERSION_INTEGER`** | `major*1'000'000 + minor*1'000 + patch` for `#if` (minor/patch &lt; 1000) |
 | **`qb::linq::version`** | `constexpr` struct mirroring the macros |
 
@@ -49,7 +49,7 @@ int main() {
 ## CMake
 
 ```cmake
-find_package(qb-linq 1.2 CONFIG REQUIRED)
+find_package(qb-linq 1.3 CONFIG REQUIRED)
 # Package version must satisfy SameMajorVersion vs the installed qb-linq.
 ```
 

@@ -2,14 +2,14 @@
 
 **Index:** all guides are listed in **[`README.md`](README.md)** (this folder).
 
-This document matches the **root [`CMakeLists.txt`](../CMakeLists.txt)**, **[`CMakePresets.json`](../CMakePresets.json)**, and the **`tests/`** / **`benchmarks/`** CMake files. The user-facing summary lives in the root **[`README.md`](../README.md)** (Build options, presets). **CI** runs a **`docs`** job (Ubuntu + Doxygen) so **`docs/Doxyfile.in`** stays valid — see **[`.github/workflows/cmake.yml`](../.github/workflows/cmake.yml)**.
+This document matches the **root [`CMakeLists.txt`](../CMakeLists.txt)**, **[`CMakePresets.json`](../CMakePresets.json)**, and the **`tests/`** / **`benchmarks/`** CMake files. The user-facing summary lives in the root **[`README.md`](../README.md)** (Build options, presets). **CI** runs a **`docs`** job (Ubuntu + Doxygen) so **`docs/Doxyfile.in`** stays valid, and a **`sanitize`** job (Ubuntu + **ASan/UBSan** on **`qb_linq_tests`** only) — see **[`.github/workflows/cmake.yml`](../.github/workflows/cmake.yml)**.
 
 ## Project (CMake facts)
 
 | Item | Value |
 |------|--------|
 | **CMake project** | `qb-linq` |
-| **Version** | `1.2.1` (`project(... VERSION 1.2.1)`) |
+| **Version** | `1.3.0` (`project(... VERSION 1.3.0)`) |
 | **Library type** | **INTERFACE** — no compiled `.lib` / `.a`; headers only |
 | **CMake target** | `qb::linq` (alias of `qb-linq`) |
 | **Include interface** | `include/` plus **`generated_include/`** (build tree) — holds **`qb/linq/version.h`** generated from **`project(VERSION)`** |
@@ -20,7 +20,7 @@ This document matches the **root [`CMakeLists.txt`](../CMakeLists.txt)**, **[`CM
 
 ## Consuming the library
 
-- **Installed package:** `find_package(qb-linq 1.2 CONFIG REQUIRED)` then `target_link_libraries(... PRIVATE qb::linq)` (see README).
+- **Installed package:** `find_package(qb-linq 1.3 CONFIG REQUIRED)` then `target_link_libraries(... PRIVATE qb::linq)` (see README).
 - **In-tree / vendor:** `add_subdirectory(qb-linq)` then `target_link_libraries(... PRIVATE qb::linq)`.
 - **Include in C++:** `#include <qb/linq.h>` only (per README).
 
@@ -44,6 +44,15 @@ When qb-linq is added as a **subproject**, tests are **off** unless you pass **`
 | **`dev`** | RelWithDebInfo | ON | ON | OFF |
 | **`ci`** | Release | ON | ON | OFF |
 | **`docs`** | Release | OFF | OFF | ON (needs Doxygen on `PATH`) |
+| **`sanitize`** | Debug | ON | OFF | OFF |
+
+The **`sanitize`** preset adds **`-fsanitize=address,undefined`** (and link flags) for **GCC** or **Clang** on **Linux** or **macOS**. It matches the **CI** `sanitize` job. Example:
+
+```bash
+cmake --preset sanitize
+cmake --build build/sanitize --parallel
+ASAN_OPTIONS=detect_leaks=1:abort_on_error=1 UBSAN_OPTIONS=halt_on_error=1 ctest --preset sanitize
+```
 
 **Binary directory:** `build/<presetName>/` (e.g. `build/dev/`).
 

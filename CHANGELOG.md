@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-04-08
+
+### Fixed
+
+- **`order_by`:** **`std::stable_sort`** for stable / **.NET `OrderBy`**-style ordering when keys compare equal (replaces **`std::sort`**, which could reorder ties). Sort predicate uses **`value_type const&`** so **MSVC** accepts calls from **`stable_sort`** internals. Regression: **`OrderAdvanced.StableForDuplicateSortKey`**.
+- **`except` / `intersect`:** match **.NET `Enumerable.Except` / `Enumerable.Intersect`** — each distinct **`value_type`** at most once, **first-seen** order of the left sequence. Documented in **`qb/linq.h`**, **`query_range.h`**, and README. **Migration:** code that depended on multiset-style output should use an explicit pass or keyed **`where`** instead.
+
+### Added
+
+- **Docs:** **`qb/linq.h`** and README — **`from`** and **lazy pipeline storage lifetime** (non-owning iterators; keep the source container or materialize before chaining lazy stages).
+- **Tests:** **`linq_exceptions_test.cpp`**, **`linq_property_fuzz_test.cpp`**, and broader coverage in **`linq_materialize_test.cpp`**, **`linq_pipeline_test.cpp`**, **`linq_views_compositional_test.cpp`**, **`linq_relational_extended_test.cpp`**, **`linq_ordering_advanced_test.cpp`**, **`linq_select_each_test.cpp`**, **`linq_join_set_test.cpp`**, **`linq_factories_test.cpp`**, **`linq_terminal_test.cpp`**, **`linq_zip_take_where_test.cpp`**.
+- **CI / CMake:** Ubuntu **`sanitize`** job (**ASan** + **UBSan** on **`qb_linq_tests`**); **`sanitize`** configure preset and **`ctest --preset sanitize`** ([**`docs/BUILDING.md`**](docs/BUILDING.md)).
+
 ## [1.2.1] - 2026-04-03
 
 ### Added
@@ -72,6 +85,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Doxygen HTML docs (**`qb_linq_docs`**, Doxygen Awesome under `docs/doxygen/`).
 - Guides under **`docs/`** (building, versioning, LLM context); **CONTRIBUTING**, **SECURITY**, **AGENTS**; GitHub issue/PR templates; documentation moved from **`doc/`** to **`docs/`**.
 
+[1.3.0]: https://github.com/isndev/qb-linq/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/isndev/qb-linq/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/isndev/qb-linq/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/isndev/qb-linq/compare/v1.0.0...v1.1.0

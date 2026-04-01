@@ -1,6 +1,7 @@
 /// @file linq_materialize_test.cpp
 /// @brief Materializing operations: order_by, maps, except / intersect, to_vector.
 
+#include <numeric>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -69,4 +70,34 @@ TEST(MaterializeToSet, UniqueSortedTree)
     auto s = qb::linq::from(data).to_set();
     std::vector<int> const expect{1, 2, 3};
     EXPECT_TRUE(qb::linq::from(s).sequence_equal(expect));
+}
+
+/** `to_vector()` snapshots data; later mutations to the source range do not change the materialized view. */
+TEST(MaterializeSnapshot, IgnoresSubsequentSourceMutation)
+{
+    std::vector<int> v{1, 2, 3, 4, 5};
+    auto snap = qb::linq::from(v)
+                    .where([](int x) { return x % 2 == 0; })
+                    .select([](int x) { return x * 10; })
+                    .to_vector();
+    v.push_back(6);
+    std::vector<int> const expect{20, 40};
+    EXPECT_TRUE(qb::linq::from(snap).sequence_equal(expect));
+}
+
+TEST(MaterializeLazyPipeline, RepeatedToVectorYieldsSameSequence)
+{
+    std::vector<int> const v = [] {
+        std::vector<int> x(100);
+        std::iota(x.begin(), x.end(), 1);
+        return x;
+    }();
+    auto q = qb::linq::from(v)
+                 .where([](int x) { return x % 7 != 0; })
+                 .select([](int x) { return x * x; })
+                 .skip(5)
+                 .take(20);
+    auto const baseline = q.to_vector();
+    for (int i = 0; i < 25; ++i)
+        EXPECT_TRUE(q.to_vector().sequence_equal(baseline)) << "iteration " << i;
 }

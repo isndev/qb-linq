@@ -37,6 +37,31 @@ jobs:
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
 
+  # AddressSanitizer + UndefinedBehaviorSanitizer on Ubuntu (tests only; benchmarks off for speed).
+  sanitize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure (ASan + UBSan)
+        run: >
+          cmake -B build-sanitize
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+          -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
+          -DQB_BUILD_TESTS=ON
+          -DQB_BUILD_BENCHMARKS=OFF
+
+      - name: Build
+        run: cmake --build build-sanitize --parallel
+
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: ctest --test-dir build-sanitize --output-on-failure
+
   # Ensures docs/Doxyfile.in and paths stay valid (Doxygen + CMake configure).
   docs:
     runs-on: ubuntu-latest

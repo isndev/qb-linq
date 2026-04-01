@@ -38,6 +38,8 @@ set(_qb_linq_test_sources
     linq_terminal_minmax_stats_test.cpp
     linq_surfaces_test.cpp
     linq_chaining_linq_style_test.cpp
+    linq_exceptions_test.cpp
+    linq_property_fuzz_test.cpp
 )
 
 add_executable(qb_linq_tests ${_qb_linq_test_sources})

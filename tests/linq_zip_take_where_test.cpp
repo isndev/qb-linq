@@ -61,6 +61,19 @@ TEST(ZipFold, MatchesZipSelectAggregate)
     EXPECT_EQ(via_fold, 1 * 10 + 2 * 20 + 3 * 30);
 }
 
+TEST(ZipFold, BothEmptyReturnsSeedUnchanged)
+{
+    std::vector<int> const a;
+    std::vector<int> const b;
+    int const out = qb::linq::from(a).zip_fold(
+        b,
+        99,
+        [](int acc, int, int) {
+            return acc;
+        });
+    EXPECT_EQ(out, 99);
+}
+
 TEST(TakeNegative, SameAsPositiveMagnitude)
 {
     std::vector<int> const data{1, 2, 3, 4, 5};

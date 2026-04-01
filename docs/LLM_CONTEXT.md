@@ -118,11 +118,11 @@ qb/linq.h
 ### 5.3 Materializers (typically `materialized_range` over `shared_ptr<container>`)
 
 - `group_by(keys...)` — nested maps + leaf `vector` (`group_by.h`).
-- `order_by(key_filters...)` — copy to `vector`, `std::sort` with `lexicographic_compare` + `asc`/`desc`/`make_filter`.
+- `order_by(key_filters...)` — copy to `vector`, **`std::stable_sort`** with `lexicographic_compare` + `asc`/`desc`/`make_filter` (stable for equal keys; matches documented / .NET-style behavior).
 - `to_vector()` / `materialize()` — `reserve_if_random_access` + `std::copy` + `back_inserter`.
 - `to_unordered_map`, `to_map`, `to_dictionary` (throws on duplicate key).
 - `to_set`, `to_unordered_set`.
-- `except(Rng)`, `intersect(Rng)` — hash set of RHS; **requires hashable `value_type`**.
+- `except(Rng)`, `intersect(Rng)` — **C#-style set ops**: distinct left values (first-seen order); hash set of RHS plus a set to dedupe output; **requires hashable `value_type`**.
 - `take_last(n)`, `skip_last(n)` — materialize to `vector` (ring / trim patterns in implementation).
 
 ### 5.4 Search / quantifiers
@@ -172,7 +172,7 @@ qb/linq.h
 
 3. **`zip` / `concat` / algorithms that assign iterators:** Inner functors in nested ranges may need to be **copy-assignable** (e.g. use `+[](){}` function pointer). Related: `select_iterator` / `where_iterator` copy-assign **skips** functor/predicate assignment by design (valid only for iterators from the **same** logical pipeline).
 
-4. **`except` / `intersect`:** `value_type` must be usable in `unordered_set`.
+4. **`except` / `intersect`:** `value_type` must be usable in `unordered_set` (membership set for `rhs` and a second set to dedupe the left). Semantics align with **.NET `Except` / `Intersect`** (distinct output, first-seen left order).
 
 5. **Terminal references:** `first()`, some `decltype(auto)` paths may return **references** into underlying data — same lifetime rules as container/iterator invalidation.
 
@@ -217,7 +217,7 @@ qb/linq.h
 
 ## 11. Free functions & re-exports (`enumerable.h`)
 
-- `from(container&)`, `from(container const&)`, `from(Iter,Iter)`, `range` alias.
+- `from(container&)`, `from(container const&)` (non-owning iterators — source must outlive lazy pipelines; see **`qb/linq.h`**), `from(Iter,Iter)`, `range` alias.
 - `as_enumerable` overloads (enumerable ref/rvalue, container, iterator pair).
 - `iota`, `empty<T>()`, `once`, `repeat`.
 - `asc`, `desc`, `make_filter<CustomBase>(...)`.
@@ -235,7 +235,7 @@ qb/linq.h
 
 ## 13. Verification hooks (repository)
 
-- **Tests:** `tests/*.cpp` (GoogleTest; 300+ cases); CMake `QB_BUILD_TESTS`. **`linq_scan_and_iterator_layout_test.cpp`** — `scan` semantics / copies, `std::partial_sum` parity, EBO `sizeof` via a minimal one-pointer RA iterator; optional `vector::iterator` checks when `sizeof(VecIt)==sizeof(int*)` (else `GTEST_SKIP`). **`linq_predicates_robustness_test.cpp`** — reference / const-RHS pipelines, `take` short-circuiting, **`reverse`** after **`take` / `take_while`** edge cases.
+- **Tests:** `tests/*.cpp` (GoogleTest; 330+ discovered cases); CMake `QB_BUILD_TESTS`. **`linq_scan_and_iterator_layout_test.cpp`** — `scan` semantics / copies, `std::partial_sum` parity, EBO `sizeof` via a minimal one-pointer RA iterator; optional `vector::iterator` checks when `sizeof(VecIt)==sizeof(int*)` (else `GTEST_SKIP`). **`linq_predicates_robustness_test.cpp`** — reference / const-RHS pipelines, `take` short-circuiting, **`reverse`** after **`take` / `take_while`** edge cases. **CI** also runs **`sanitize`** (Ubuntu): **ASan + UBSan** on **`qb_linq_tests`** only; locally **`cmake --preset sanitize`** / **`ctest --preset sanitize`** ([**`docs/BUILDING.md`**](BUILDING.md)).
 - **Benchmarks:** `benchmarks/*.cpp` (Google Benchmark); `QB_BUILD_BENCHMARKS` → `qb_linq_benchmark`. **`bench_scan_contract.cpp`** — `scan` stress (per-step iterator copy) vs straight walk; **`select`** empty vs fat functor.
 - **Human README:** performance expectations — root `README.md` section **Performance & benchmarks**.
 

@@ -50,6 +50,24 @@ TEST(EachSideEffect, InPlaceMutationDiscardingReturn)
     EXPECT_EQ(data, expect);
 }
 
+TEST(EachThenWhere, SubsequentQuerySeesMutatedStrings)
+{
+    std::vector<record> rows;
+    for (int i = 0; i < 50; ++i)
+        rows.push_back(record{i, "p" + std::to_string(i)});
+
+    qb::linq::from(rows).each([](record& r) { r.name += "_m"; });
+
+    auto out = qb::linq::from(rows)
+                   .where([](record const& r) { return r.id % 10 == 0; })
+                   .select([](record const& r) { return r.name; })
+                   .to_vector();
+
+    ASSERT_EQ(out.long_count(), 5u);
+    EXPECT_EQ(out.first(), "p0_m");
+    EXPECT_EQ(out.last(), "p40_m");
+}
+
 TEST(MaterializeAlias, SameAsToVector)
 {
     std::vector<int> const data{4, 5, 6};

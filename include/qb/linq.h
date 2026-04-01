@@ -51,12 +51,21 @@
  *   `decltype(auto)` through `enumerable`). Do not store those references past iterator invalidation —
  *   same rules as holding references into a live container or a `select` projection.
  * - **`sum` / `sum_if`** require `value_type` to be default-constructible and to support `operator+=`.
- * - **`except` / `intersect`** build `std::unordered_set<value_type>`: elements must be **hashable** and
- *   comparable for lookup (as `std::unordered_set` requires).
+ * - **`except` / `intersect`** match **.NET `Enumerable.Except` / `Enumerable.Intersect`**: results contain each
+ *   **distinct** `value_type` at most once, in **first-seen order** of the left sequence. They build
+ *   `std::unordered_set<value_type>` for the right-hand membership set (and for deduplicating the left); elements
+ *   must be **hashable** and equality-comparable as `std::unordered_set` requires.
  * - **`zip` / `concat`** store nested iterators that may be **copy-assigned** during iteration. Functors
  *   inside the inner range (e.g. `where` / `select` on the RHS) must be **copy-assignable** — use stateless
  *   lambdas decayed to function pointers (`+[](…){…}`) or named function objects when composing pipelines
  *   as the inner operand.
+ * - **`from` / storage lifetime:** `from(C&)` / `from(C const&)` store **non-owning** iterators only. The
+ *   **container** must **outlive** the `enumerable` while lazy stages (`where`, `select`, …) run. A **temporary**
+ *   bound to `from(C const&)` is destroyed at the end of the **full-expression**; chaining
+ *   **`from(make_container()).where(…).…`** is **undefined behavior** once the inner `enumerable` from `from` is
+ *   destroyed after the next `.where` / `.select` (downstream views keep iterators, not the owning range). Use a
+ *   **named** container, **`auto m = … .to_vector()`** then further lazy ops **while `m` lives**, or **`from(b,e)`**
+ *   into storage you control.
  * - Views are **not** thread-safe; `where_view` caches the first matching position on the first `begin()`.
  *   Do not share a pipeline across threads without external synchronization.
  * - **`to_vector()`** / **`materialize()`** return **`enumerable<materialized_range<…>>`** (a forwarding range backed by

@@ -54,13 +54,27 @@
         "QB_BUILD_BENCHMARKS": "OFF",
         "QB_LINQ_BUILD_DOCS": "ON"
       }
+    },
+    {
+      "name": "sanitize",
+      "displayName": "Debug — tests with ASan + UBSan (GCC/Clang on Linux/macOS)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "QB_BUILD_TESTS": "ON",
+        "QB_BUILD_BENCHMARKS": "OFF",
+        "CMAKE_CXX_FLAGS": "-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
+      }
     }
   ],
   "buildPresets": [
     { "name": "release", "configurePreset": "release" },
     { "name": "dev", "configurePreset": "dev" },
     { "name": "ci", "configurePreset": "ci" },
-    { "name": "docs", "configurePreset": "docs" }
+    { "name": "docs", "configurePreset": "docs" },
+    { "name": "sanitize", "configurePreset": "sanitize" }
   ],
   "testPresets": [
     {
@@ -71,6 +85,11 @@
     {
       "name": "ci",
       "configurePreset": "ci",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "sanitize",
+      "configurePreset": "sanitize",
       "output": { "outputOnFailure": true }
     }
   ]
