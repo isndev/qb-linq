@@ -463,7 +463,7 @@ public:
     }
 
     /** @brief `take` first `n` elements (sign normalized; LINQ `Take`). */
-    [[nodiscard]] auto take(int n) const { return pipe(static_cast<Handle const&>(*this).take(n)); }
+    [[nodiscard]] auto take(std::ptrdiff_t n) const { return pipe(static_cast<Handle const&>(*this).take(n)); }
 
     /** @brief Elements from start while `pred` holds (LINQ `TakeWhile`). */
     template <class P>

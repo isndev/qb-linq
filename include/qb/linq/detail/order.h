@@ -49,13 +49,13 @@ struct order_predicate_base;
 template <>
 struct order_predicate_base<order_kind::ascending> {
     template <class L, class R>
-    bool operator()(L const& lhs, R const& rhs) const noexcept(noexcept(lhs < rhs))
+    constexpr bool operator()(L const& lhs, R const& rhs) const noexcept(noexcept(lhs < rhs))
     {
         return lhs < rhs;
     }
 
     template <class L, class R>
-    bool next(L const& lhs, R const& rhs) const noexcept(noexcept(lhs == rhs))
+    constexpr bool next(L const& lhs, R const& rhs) const noexcept(noexcept(lhs == rhs))
     {
         return lhs == rhs;
     }
@@ -68,13 +68,13 @@ struct order_predicate_base<order_kind::ascending> {
 template <>
 struct order_predicate_base<order_kind::descending> {
     template <class L, class R>
-    bool operator()(L const& lhs, R const& rhs) const noexcept(noexcept(lhs > rhs))
+    constexpr bool operator()(L const& lhs, R const& rhs) const noexcept(noexcept(lhs > rhs))
     {
         return lhs > rhs;
     }
 
     template <class L, class R>
-    bool next(L const& lhs, R const& rhs) const noexcept(noexcept(lhs == rhs))
+    constexpr bool next(L const& lhs, R const& rhs) const noexcept(noexcept(lhs == rhs))
     {
         return lhs == rhs;
     }
@@ -87,13 +87,13 @@ struct order_predicate_base<order_kind::descending> {
 template <>
 struct order_predicate_base<order_kind::custom> {
     template <class L, class R>
-    bool operator()(L const&, R const&) const noexcept
+    constexpr bool operator()(L const&, R const&) const noexcept
     {
         return false;
     }
 
     template <class L, class R>
-    bool next(L const&, R const&) const noexcept
+    constexpr bool next(L const&, R const&) const noexcept
     {
         return false;
     }
@@ -126,7 +126,7 @@ public:
     /** @{ */
     /** @brief Strict ordering on projected keys (`BasePredicate` applied to `key(lhs)`, `key(rhs)`). */
     template <class L, class R>
-    bool primary(L const& lhs, R const& rhs) const
+    constexpr bool primary(L const& lhs, R const& rhs) const
         noexcept(noexcept(std::declval<BasePredicate const&>()(key_(lhs), key_(rhs))))
     {
         return static_cast<BasePredicate const&>(*this)(key_(lhs), key_(rhs));
@@ -134,7 +134,7 @@ public:
 
     /** @brief True when keys are tied on this level (delegates to `next` on projected keys). */
     template <class L, class R>
-    bool tied(L const& lhs, R const& rhs) const
+    constexpr bool tied(L const& lhs, R const& rhs) const
         noexcept(noexcept(std::declval<BasePredicate const&>().next(key_(lhs), key_(rhs))))
     {
         return static_cast<BasePredicate const&>(*this).next(key_(lhs), key_(rhs));
@@ -154,7 +154,7 @@ private:
  * @return True if `a` is ordered before `b` under `(head, tail...)`.
  */
 template <class In, class Filter, class... Filters>
-bool lexicographic_compare(In const& a, In const& b, Filter const& head, Filters&&... tail)
+constexpr bool lexicographic_compare(In const& a, In const& b, Filter const& head, Filters&&... tail)
 {
     if (head.primary(a, b))
         return true;
@@ -168,7 +168,7 @@ bool lexicographic_compare(In const& a, In const& b, Filter const& head, Filters
  * @brief Single-key ordering: `head.primary(a,b)`.
  */
 template <class In, class Filter>
-bool lexicographic_compare(In const& a, In const& b, Filter const& head)
+constexpr bool lexicographic_compare(In const& a, In const& b, Filter const& head)
 {
     return head.primary(a, b);
 }

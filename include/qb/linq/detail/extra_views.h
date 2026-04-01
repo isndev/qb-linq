@@ -551,7 +551,7 @@ public:
     [[nodiscard]] reference operator*() const
     {
         if (phase_ == 1)
-            return const_cast<reference>(parent_->default_value_ref());
+            return parent_->default_value_ref();
         return *cur_;
     }
 
@@ -596,9 +596,9 @@ class default_if_empty_view : public query_range_algorithms<default_if_empty_vie
     friend class default_if_empty_iterator<It, T>;
 
     It b_{}, e_{};
-    T def_{};
+    mutable T def_{};
 
-    [[nodiscard]] T const& default_value_ref() const noexcept { return def_; }
+    [[nodiscard]] T& default_value_ref() const noexcept { return def_; }
 
 public:
     /**

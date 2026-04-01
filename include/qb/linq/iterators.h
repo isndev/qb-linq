@@ -28,6 +28,7 @@
  */
 
 #include <algorithm>
+#include <cstddef>
 #include <functional>
 #include <iterator>
 #include <type_traits>
@@ -476,7 +477,7 @@ public:
      * @param base Current underlying position.
      * @param remaining Negated take budget at begin (`take_n_view` passes `-count`); `0` at end iterator.
      */
-    take_n_iterator(BaseIt base, int remaining) noexcept(
+    take_n_iterator(BaseIt base, std::ptrdiff_t remaining) noexcept(
         std::is_nothrow_move_constructible_v<BaseIt>)
         : BaseIt(std::move(base)), remaining_(remaining)
     {}
@@ -539,7 +540,7 @@ public:
     /** @} */
 
 private:
-    int remaining_;
+    std::ptrdiff_t remaining_;
 };
 
 } // namespace qb::linq

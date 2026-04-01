@@ -335,7 +335,7 @@ public:
      * @param e Underlying sequence end.
      * @param n Take count (`take_n_count` normalizes sign / overflow; see class brief).
      */
-    take_n_view(BaseIt b, BaseIt e, int n)
+    take_n_view(BaseIt b, BaseIt e, std::ptrdiff_t n)
         : query_state<take_n_iterator<BaseIt>>(
               take_n_iterator<BaseIt>(std::move(b), -take_n_count(n)),
               take_n_iterator<BaseIt>(std::move(e), 0))
@@ -343,16 +343,15 @@ public:
 
 private:
     /**
-     * @brief Magnitude of `n` for take count (`n < 0` → `abs`); overflow / `INT_MIN` → `0`.
+     * @brief Magnitude of `n` for take count (`n < 0` → `abs`); overflow of negation → `0`.
      * @see take_n_iterator::remaining_
      */
-    static int take_n_count(int n) noexcept
+    static std::ptrdiff_t take_n_count(std::ptrdiff_t n) noexcept
     {
-        long long const v = n;
-        long long const mag = v < 0 ? -v : v;
-        if (mag > static_cast<long long>(std::numeric_limits<int>::max()))
+        // Guard against negating PTRDIFF_MIN (UB)
+        if (n == std::numeric_limits<std::ptrdiff_t>::min())
             return 0;
-        return static_cast<int>(mag);
+        return n < 0 ? -n : n;
     }
 };
 
