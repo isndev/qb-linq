@@ -235,10 +235,10 @@ public:
         if constexpr (std::is_base_of_v<std::bidirectional_iterator_tag, cat>) {
             return *std::prev(e);
         } else {
-            value_type out = *b;
+            iterator prev = b;
             for (++b; b != e; ++b)
-                out = *b;
-            return out;
+                prev = b;
+            return *prev;
         }
     }
 
@@ -253,10 +253,10 @@ public:
         if constexpr (std::is_base_of_v<std::bidirectional_iterator_tag, cat>) {
             return *std::prev(e);
         } else {
-            value_type out = *b;
+            iterator prev = b;
             for (++b; b != e; ++b)
-                out = *b;
-            return out;
+                prev = b;
+            return *prev;
         }
     }
 
