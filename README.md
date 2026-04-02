@@ -146,9 +146,11 @@ Unless noted, methods are **`const`** and return a new **`enumerable`** for lazy
 | **`select(f)`** | Map each element. |
 | **`select_indexed(f)`** | `f(element, index)` (lazy; zero-based index). |
 | **`select_many(fs...)`** | **Tuple** of one projection per loader per row (not nested flattening). |
+| **`flat_map(f)`** / **`select_many_flatten(f)`** | True C# `SelectMany`: project each element to a sub-range via `f` and **flatten** (lazy). |
 | **`where(pred)`** | Filter; first `begin()` may cache first match. |
 | **`where_indexed(pred)`** | `pred(element, index)` (lazy). |
 | **`of_type<U>()`** | Polymorphic **`dynamic_cast`** filter (`value_type` must be pointer, pointee polymorphic). |
+| **`cast<U>()`** | Lazy **`static_cast<U>`** of each element (complement to `of_type`). |
 | **`skip(n)`** | Drop first `n`. |
 | **`skip_while(pred)`** | Drop while predicate true. |
 | **`take(n)`** | Take `n` (`int`; negative magnitude like LINQ; `INT_MIN` → empty). |
@@ -170,6 +172,7 @@ Unless noted, methods are **`const`** and return a new **`enumerable`** for lazy
 | **`scan(seed, f)`** | Running fold; yields each accumulator. |
 | **`chunk(size)`** | Chunks as `std::vector` slices (lazy per chunk). |
 | **`stride(step)`** | Every `step`-th element (`0` clamped to `1`). |
+| **`sliding_window(size)`** | Overlapping windows of `size` elements (each as `std::vector`); slides by one element. |
 | **`distinct()`** | First occurrence by value (hash). |
 | **`distinct_by(keyfn)`** | First occurrence per key. |
 
@@ -265,6 +268,8 @@ Unless noted, methods are **`const`** and return a new **`enumerable`** for lazy
 | **`average()`** / **`average_if(pred)`** | Mean (`double`); throws if empty / no match. |
 | **`aggregate(init, f)`** / **`fold`** | Left fold with seed (`fold` = alias). |
 | **`reduce(f)`** | Fold without seed; first element is initial acc; empty throws. |
+| **`aggregate_by(keyf, seed, f)`** | Group + fold per key in one pass; `vector<pair<Key, Acc>>` in first-seen order. |
+| **`reduce_by(keyf, f)`** | Group + fold per key without seed; first element per key is initial acc. |
 
 ### Order statistics & spread
 

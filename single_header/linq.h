@@ -701,6 +701,10 @@ template <class BaseIt>
 class stride_view; ///< Every k-th element (`extra_views.h`).
 template <class BaseIt, class Acc, class F>
 class scan_view; ///< Lazy prefix fold / running aggregate (`extra_views.h`).
+template <class BaseIt, class F>
+class flat_map_view; ///< Lazy one-to-many projection + flatten (`extra_views.h`).
+template <class BaseIt>
+class sliding_window_view; ///< Overlapping windows of size N (`extra_views.h`).
 
 /**
  * @ingroup linq
@@ -1085,6 +1089,61 @@ public:
     /** @brief `single_view(v).concat(*this)` — one element before the sequence. */
     template <class T>
     [[nodiscard]] auto prepend(T&& v) const;
+
+    /**
+     * @brief Projects each element to a sub-range via `f` and flattens into a single sequence (C# `SelectMany`).
+     * @details `f(*it)` must return a range (anything with `begin()`/`end()`). Lazily evaluated.
+     */
+    template <class F>
+    [[nodiscard]] flat_map_view<iterator, std::decay_t<F>> flat_map(F&& f) const;
+
+    /** @brief Alias for `flat_map` matching C# `SelectMany` naming. */
+    template <class F>
+    [[nodiscard]] flat_map_view<iterator, std::decay_t<F>> select_many_flatten(F&& f) const;
+
+    /**
+     * @brief Overlapping sliding windows of `size` elements, each yielded as a `std::vector` (by value).
+     * @details Last windows may have fewer than `size` elements if the sequence is shorter than `size`.
+     *          `size == 0` is clamped to 1. Lazy per-window: each `operator++` advances by one element.
+     */
+    [[nodiscard]] sliding_window_view<iterator> sliding_window(std::size_t size) const;
+
+    /**
+     * @brief Static cast of each element to `U` (complement to `of_type<U>()`).
+     * @details Lazy; applies `static_cast<U>(*it)` per element. Unlike `of_type` (which uses `dynamic_cast`
+     *          and filters), `cast` assumes every element is convertible and casts unconditionally.
+     */
+    template <class U>
+    [[nodiscard]] auto cast() const
+    {
+        return select([](reference v) -> U { return static_cast<U>(v); });
+    }
+
+    /**
+     * @brief Group by key and reduce each group in one pass (no intermediate collections).
+     * @details Equivalent to `group_by(key) → select(reduce)`, but done in a single traversal.
+     *          Returns `materialized_range` over `vector<pair<Key, Acc>>` in first-seen key order.
+     * @param keyf Key projection: `keyf(*it)` → hashable key.
+     * @param seed Initial accumulator per group.
+     * @param reducer Binary: `reducer(acc, *it)` → updated acc.
+     */
+    template <class KeyFn, class Acc, class Reducer>
+    [[nodiscard]] auto aggregate_by(KeyFn&& keyf, Acc const& seed, Reducer&& reducer) const
+        -> materialized_range<
+            typename std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, Acc>>::iterator,
+            std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, Acc>>>;
+
+    /**
+     * @brief Group by key and reduce each group without a seed — first element per key is the initial value.
+     * @details Throws `std::out_of_range` if any group would be empty (impossible by construction since groups
+     *          are created on first encounter). Returns `materialized_range` over `vector<pair<Key, value_type>>`
+     *          in first-seen key order.
+     */
+    template <class KeyFn, class Reducer>
+    [[nodiscard]] auto reduce_by(KeyFn&& keyf, Reducer&& reducer) const
+        -> materialized_range<
+            typename std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, value_type>>::iterator,
+            std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, value_type>>>;
 
     /** @brief Unique elements in unspecified order (`std::unordered_set`). */
     [[nodiscard]] auto to_unordered_set() const;
@@ -3917,6 +3976,220 @@ public:
 };
 
 // ---------------------------------------------------------------------------
+// flat_map_view — one-to-many projection + flatten (C# SelectMany).
+// ---------------------------------------------------------------------------
+
+/**
+ * @ingroup linq
+ * @brief Iterator that projects each outer element to a sub-range and yields inner elements sequentially.
+ */
+template <class BaseIt, class F>
+class flat_map_iterator {
+    using outer_ref = typename std::iterator_traits<BaseIt>::reference;
+    using inner_range_t = std::decay_t<std::invoke_result_t<F&, outer_ref>>;
+    using inner_it_t = decltype(std::declval<inner_range_t>().begin());
+
+    BaseIt cur_{};
+    BaseIt end_{};
+    F* fn_{nullptr};
+    mutable inner_range_t inner_{};
+    mutable inner_it_t inner_cur_{};
+    mutable inner_it_t inner_end_{};
+    mutable bool inner_loaded_{false};
+    bool at_end_{true};
+
+    void load_inner()
+    {
+        inner_ = (*fn_)(*cur_);
+        inner_cur_ = inner_.begin();
+        inner_end_ = inner_.end();
+        inner_loaded_ = true;
+    }
+
+    void advance_to_valid()
+    {
+        while (cur_ != end_) {
+            if (!inner_loaded_)
+                load_inner();
+            if (inner_cur_ != inner_end_)
+                return;
+            ++cur_;
+            inner_loaded_ = false;
+        }
+        at_end_ = true;
+    }
+
+public:
+    using value_type = typename std::iterator_traits<inner_it_t>::value_type;
+    using reference = typename std::iterator_traits<inner_it_t>::reference;
+    using difference_type = std::ptrdiff_t;
+    using pointer = void;
+    using iterator_category = std::forward_iterator_tag;
+
+    flat_map_iterator() = default;
+
+    flat_map_iterator(BaseIt b, BaseIt e, F* fn, bool is_end)
+        : cur_(std::move(b)), end_(std::move(e)), fn_(fn), at_end_(is_end)
+    {
+        if (!at_end_)
+            advance_to_valid();
+    }
+
+    [[nodiscard]] reference operator*() const { return *inner_cur_; }
+
+    flat_map_iterator& operator++()
+    {
+        ++inner_cur_;
+        if (inner_cur_ == inner_end_) {
+            ++cur_;
+            inner_loaded_ = false;
+            advance_to_valid();
+        }
+        return *this;
+    }
+
+    flat_map_iterator operator++(int)
+    {
+        auto t = *this;
+        ++*this;
+        return t;
+    }
+
+    [[nodiscard]] friend bool operator==(flat_map_iterator const& a, flat_map_iterator const& b) noexcept
+    {
+        return a.at_end_ == b.at_end_ && (a.at_end_ || a.cur_ == b.cur_);
+    }
+    [[nodiscard]] friend bool operator!=(flat_map_iterator const& a, flat_map_iterator const& b) noexcept
+    {
+        return !(a == b);
+    }
+};
+
+/**
+ * @ingroup linq
+ * @brief Lazy one-to-many projection: `f(*it)` returns a range; all inner elements are yielded sequentially.
+ * @details Iterators hold a non-owning `F*` to the view's functor. Must not outlive the view.
+ */
+template <class BaseIt, class F>
+class flat_map_view : public query_range_algorithms<flat_map_view<BaseIt, F>, flat_map_iterator<BaseIt, F>> {
+    BaseIt b_{}, e_{};
+    mutable F fn_{};
+
+public:
+    flat_map_view(BaseIt b, BaseIt e, F fn)
+        : b_(std::move(b)), e_(std::move(e)), fn_(std::move(fn))
+    {}
+
+    [[nodiscard]] flat_map_iterator<BaseIt, F> begin() const
+    {
+        return flat_map_iterator<BaseIt, F>(b_, e_, &fn_, b_ == e_);
+    }
+    [[nodiscard]] flat_map_iterator<BaseIt, F> end() const
+    {
+        return flat_map_iterator<BaseIt, F>(e_, e_, &fn_, true);
+    }
+};
+
+// ---------------------------------------------------------------------------
+// sliding_window_view — overlapping windows of size N.
+// ---------------------------------------------------------------------------
+
+/**
+ * @ingroup linq
+ * @brief Iterator yielding overlapping windows as `std::vector` values.
+ */
+template <class BaseIt>
+class sliding_window_iterator {
+    using elem_t = std::remove_cv_t<typename std::iterator_traits<BaseIt>::value_type>;
+    using window_t = std::vector<elem_t>;
+
+    BaseIt cur_{};
+    BaseIt end_{};
+    std::size_t n_{1};
+    mutable window_t buf_{};
+    bool done_{true};
+
+    void load_window()
+    {
+        buf_.clear();
+        buf_.reserve(n_);
+        auto it = cur_;
+        for (std::size_t i = 0; i < n_ && it != end_; ++i, ++it)
+            buf_.push_back(static_cast<elem_t>(*it));
+    }
+
+public:
+    using value_type = window_t;
+    using reference = window_t const&;
+    using difference_type = std::ptrdiff_t;
+    using pointer = void;
+    using iterator_category = std::forward_iterator_tag;
+
+    sliding_window_iterator() = default;
+
+    sliding_window_iterator(BaseIt b, BaseIt e, std::size_t n, bool is_end)
+        : cur_(std::move(b)), end_(std::move(e)), n_(n < 1 ? 1 : n), done_(is_end)
+    {
+        if (!done_) {
+            if (cur_ == end_)
+                done_ = true;
+            else
+                load_window();
+        }
+    }
+
+    [[nodiscard]] reference operator*() const { return buf_; }
+
+    sliding_window_iterator& operator++()
+    {
+        ++cur_;
+        if (cur_ == end_) {
+            done_ = true;
+        } else {
+            load_window();
+        }
+        return *this;
+    }
+
+    sliding_window_iterator operator++(int)
+    {
+        auto t = *this;
+        ++*this;
+        return t;
+    }
+
+    [[nodiscard]] friend bool operator==(
+        sliding_window_iterator const& a, sliding_window_iterator const& b) noexcept
+    {
+        return a.done_ == b.done_ && (a.done_ || a.cur_ == b.cur_);
+    }
+    [[nodiscard]] friend bool operator!=(
+        sliding_window_iterator const& a, sliding_window_iterator const& b) noexcept
+    {
+        return !(a == b);
+    }
+};
+
+/**
+ * @ingroup linq
+ * @brief Overlapping windows of `n` elements; each `operator++` slides by one element.
+ */
+template <class BaseIt>
+class sliding_window_view
+    : public query_range_algorithms<sliding_window_view<BaseIt>, sliding_window_iterator<BaseIt>> {
+    BaseIt b_{}, e_{};
+    std::size_t n_{1};
+
+public:
+    sliding_window_view(BaseIt b, BaseIt e, std::size_t n)
+        : b_(std::move(b)), e_(std::move(e)), n_(n < 1 ? 1 : n)
+    {}
+
+    [[nodiscard]] sliding_window_iterator<BaseIt> begin() const { return {b_, e_, n_, false}; }
+    [[nodiscard]] sliding_window_iterator<BaseIt> end() const { return {b_, e_, n_, true}; }
+};
+
+// ---------------------------------------------------------------------------
 // query_range_algorithms — concat / zip / default_if_empty / distinct
 // (definitions after view types; declarations in query_range.h)
 // ---------------------------------------------------------------------------
@@ -4046,6 +4319,30 @@ auto query_range_algorithms<Derived, Iter>::prepend(T&& v) const
 {
     using U = std::decay_t<T>;
     return single_view<U>(std::forward<T>(v)).concat(derived());
+}
+
+/** @brief Out-of-line `flat_map`: project each element to sub-range and flatten. */
+template <class Derived, class Iter>
+template <class F>
+flat_map_view<Iter, std::decay_t<F>> query_range_algorithms<Derived, Iter>::flat_map(F&& f) const
+{
+    return flat_map_view<Iter, std::decay_t<F>>(
+        derived().begin(), derived().end(), std::forward<F>(f));
+}
+
+/** @brief Out-of-line `select_many_flatten`: alias for `flat_map`. */
+template <class Derived, class Iter>
+template <class F>
+flat_map_view<Iter, std::decay_t<F>> query_range_algorithms<Derived, Iter>::select_many_flatten(F&& f) const
+{
+    return flat_map(std::forward<F>(f));
+}
+
+/** @brief Out-of-line `sliding_window`: overlapping windows of `size` elements. */
+template <class Derived, class Iter>
+sliding_window_view<Iter> query_range_algorithms<Derived, Iter>::sliding_window(std::size_t size) const
+{
+    return sliding_window_view<Iter>(derived().begin(), derived().end(), size);
 }
 
 } // namespace detail
@@ -5117,6 +5414,69 @@ auto query_range_algorithms<Derived, Iter>::to_set() const
     return wrap_materialized(std::move(owner));
 }
 
+/** @brief Out-of-line `aggregate_by`: group by key and reduce each group in one pass. */
+template <class Derived, class Iter>
+template <class KeyFn, class Acc, class Reducer>
+auto query_range_algorithms<Derived, Iter>::aggregate_by(KeyFn&& keyf, Acc const& seed, Reducer&& reducer) const
+    -> materialized_range<
+        typename std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, Acc>>::iterator,
+        std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, Acc>>>
+{
+    using ref = typename query_range_algorithms<Derived, Iter>::reference;
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    using K = std::decay_t<std::invoke_result_t<KeyFn&, ref>>;
+    using pair_t = std::pair<K, Acc>;
+    using vec_t = std::vector<pair_t>;
+
+    std::unordered_map<K, std::size_t> key_to_idx;
+    auto owner = std::make_shared<vec_t>();
+    reserve_if_random_access(*owner, derived().begin(), derived().end());
+
+    for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
+        K k = keyf(*it);
+        auto ins = key_to_idx.emplace(k, owner->size());
+        if (ins.second) {
+            owner->emplace_back(std::move(k), reducer(seed, *it));
+        } else {
+            auto& acc = (*owner)[ins.first->second].second;
+            acc = reducer(std::move(acc), *it);
+        }
+    }
+    return wrap_materialized(std::move(owner));
+}
+
+/** @brief Out-of-line `reduce_by`: group by key and fold without seed. */
+template <class Derived, class Iter>
+template <class KeyFn, class Reducer>
+auto query_range_algorithms<Derived, Iter>::reduce_by(KeyFn&& keyf, Reducer&& reducer) const
+    -> materialized_range<
+        typename std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, value_type>>::iterator,
+        std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, value_type>>>
+{
+    using ref = typename query_range_algorithms<Derived, Iter>::reference;
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    using K = std::decay_t<std::invoke_result_t<KeyFn&, ref>>;
+    using val_t = typename query_range_algorithms<Derived, Iter>::value_type;
+    using pair_t = std::pair<K, val_t>;
+    using vec_t = std::vector<pair_t>;
+
+    std::unordered_map<K, std::size_t> key_to_idx;
+    auto owner = std::make_shared<vec_t>();
+    reserve_if_random_access(*owner, derived().begin(), derived().end());
+
+    for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
+        K k = keyf(*it);
+        auto ins = key_to_idx.emplace(k, owner->size());
+        if (ins.second) {
+            owner->emplace_back(std::move(k), static_cast<val_t>(*it));
+        } else {
+            auto& acc = (*owner)[ins.first->second].second;
+            acc = reducer(std::move(acc), *it);
+        }
+    }
+    return wrap_materialized(std::move(owner));
+}
+
 } // namespace detail
 
 } // namespace qb::linq
@@ -5436,6 +5796,33 @@ public:
     {
         return pipe(static_cast<Handle const&>(*this).prepend(std::forward<T>(v)));
     }
+
+    /** @brief Project each element to a sub-range and flatten (C# `SelectMany`). */
+    template <class F>
+    [[nodiscard]] auto flat_map(F&& f) const
+    {
+        return pipe(static_cast<Handle const&>(*this).flat_map(std::forward<F>(f)));
+    }
+
+    /** @brief Alias for `flat_map` matching C# `SelectMany` naming. */
+    template <class F>
+    [[nodiscard]] auto select_many_flatten(F&& f) const
+    {
+        return pipe(static_cast<Handle const&>(*this).select_many_flatten(std::forward<F>(f)));
+    }
+
+    /** @brief Overlapping sliding windows of `size` elements (each yielded as a `std::vector`). */
+    [[nodiscard]] auto sliding_window(std::size_t size) const
+    {
+        return pipe(static_cast<Handle const&>(*this).sliding_window(size));
+    }
+
+    /** @brief Static cast each element to `U` (complement to `of_type<U>()`). */
+    template <class U>
+    [[nodiscard]] auto cast() const
+    {
+        return pipe(static_cast<Handle const&>(*this).template cast<U>());
+    }
     /** @} */
 
     /** @name Sets and maps (materializing) */
@@ -5547,6 +5934,22 @@ public:
     [[nodiscard]] auto count_by(KeyFn&& keyf) const
     {
         return pipe(static_cast<Handle const&>(*this).count_by(std::forward<KeyFn>(keyf)));
+    }
+
+    /** @brief Group by key and reduce each group in one pass (no intermediate collections). */
+    template <class KeyFn, class Acc, class Reducer>
+    [[nodiscard]] auto aggregate_by(KeyFn&& keyf, Acc const& seed, Reducer&& reducer) const
+    {
+        return pipe(static_cast<Handle const&>(*this).aggregate_by(
+            std::forward<KeyFn>(keyf), seed, std::forward<Reducer>(reducer)));
+    }
+
+    /** @brief Group by key and reduce each group without seed — first element per key is initial value. */
+    template <class KeyFn, class Reducer>
+    [[nodiscard]] auto reduce_by(KeyFn&& keyf, Reducer&& reducer) const
+    {
+        return pipe(static_cast<Handle const&>(*this).reduce_by(
+            std::forward<KeyFn>(keyf), std::forward<Reducer>(reducer)));
     }
     /** @} */
 

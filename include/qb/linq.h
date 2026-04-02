@@ -66,6 +66,10 @@
  *   inside the inner range (e.g. `where` / `select` on the RHS) must be **copy-assignable** — use stateless
  *   lambdas decayed to function pointers (`+[](…){…}`) or named function objects when composing pipelines
  *   as the inner operand.
+ * - **`flat_map` / `scan`** store functors in the view; iterators hold a raw pointer (`F*`) to the view's
+ *   functor. Iterators **must not outlive** the view. Same applies to `sliding_window_view`.
+ * - **`aggregate_by` / `reduce_by`** use `std::unordered_map` internally; keys must be **hashable**.
+ *   Results are in **first-seen key order**. `reduce_by` uses the first element per key as initial accumulator.
  * - **`from` / storage lifetime:** `from(C&)` / `from(C const&)` store **non-owning** iterators only. The
  *   **container** must **outlive** the `enumerable` while lazy stages (`where`, `select`, …) run. A **temporary**
  *   bound to `from(C const&)` is destroyed at the end of the **full-expression**; chaining
