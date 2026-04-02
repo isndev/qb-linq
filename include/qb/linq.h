@@ -52,8 +52,12 @@
  * - **`left_join`** / **`right_join`** pass **`std::optional`** (by `const` reference) for the side that may be
  *   missing; the result selector must accept that shape (see README relational table).
  * - Terminals such as `first()`, `last()`, `element_at()`, `single()` may return **`reference`** (via
- *   `decltype(auto)` through `enumerable`). Do not store those references past iterator invalidation —
- *   same rules as holding references into a live container or a `select` projection.
+ *   `decltype(auto)` through `enumerable`). `last()` on forward-only iterators returns **by value** (linear
+ *   scan). Do not store references past iterator invalidation — same rules as holding references into a
+ *   live container or a `select` projection.
+ * - **`*_or_default` / `*_or_default_if` variants** (e.g. `first_or_default`, `single_or_default_if`)
+ *   return `value_type{}` and therefore **require default-constructible `value_type`**. The throwing variants
+ *   (`last_if`, `single_if`) use `std::optional` internally and do **not** require default construction.
  * - **`sum` / `sum_if`** require `value_type` to be default-constructible and to support `operator+=`.
  * - **`except` / `intersect`** (and **`except_by` / `intersect_by` / `union_by`**) follow **.NET**-style set semantics
  *   on values or **keys**: at most one output per distinct value or key, **first-seen** order as documented on each
@@ -62,6 +66,10 @@
  *   inside the inner range (e.g. `where` / `select` on the RHS) must be **copy-assignable** — use stateless
  *   lambdas decayed to function pointers (`+[](…){…}`) or named function objects when composing pipelines
  *   as the inner operand.
+ * - **`flat_map` / `scan`** store functors in the view; iterators hold a raw pointer (`F*`) to the view's
+ *   functor. Iterators **must not outlive** the view. Same applies to `sliding_window_view`.
+ * - **`aggregate_by` / `reduce_by`** use `std::unordered_map` internally; keys must be **hashable**.
+ *   Results are in **first-seen key order**. `reduce_by` uses the first element per key as initial accumulator.
  * - **`from` / storage lifetime:** `from(C&)` / `from(C const&)` store **non-owning** iterators only. The
  *   **container** must **outlive** the `enumerable` while lazy stages (`where`, `select`, …) run. A **temporary**
  *   bound to `from(C const&)` is destroyed at the end of the **full-expression**; chaining

@@ -112,6 +112,10 @@ template <class BaseIt>
 class stride_view; ///< Every k-th element (`extra_views.h`).
 template <class BaseIt, class Acc, class F>
 class scan_view; ///< Lazy prefix fold / running aggregate (`extra_views.h`).
+template <class BaseIt, class F>
+class flat_map_view; ///< Lazy one-to-many projection + flatten (`extra_views.h`).
+template <class BaseIt>
+class sliding_window_view; ///< Overlapping windows of size N (`extra_views.h`).
 
 /**
  * @ingroup linq
@@ -242,16 +246,26 @@ public:
     }
 
     /**
-     * @brief Last element; throws if empty. Returns a reference into the range (requires bidirectional iterators).
-     * @details For forward-only iterators, use `last_or_default()` or `last_if()` instead (these return by value).
+     * @brief Last element; throws if empty.
+     * @details Returns a reference for bidirectional+ iterators (`std::prev`). For forward-only iterators a
+     *          linear scan locates the last position and the result is returned by value.
+     * @throws std::out_of_range with message `qb::linq::last` when the sequence is empty.
      */
-    [[nodiscard]] reference last() const
+    [[nodiscard]] decltype(auto) last() const
     {
         iterator b = derived().begin();
         iterator const e = derived().end();
         if (b == e)
             throw std::out_of_range("qb::linq::last");
-        return *std::prev(e);
+        using cat = typename std::iterator_traits<iterator>::iterator_category;
+        if constexpr (std::is_base_of_v<std::bidirectional_iterator_tag, cat>) {
+            return *std::prev(e);
+        } else {
+            iterator prev = b;
+            for (++b; b != e; ++b)
+                prev = b;
+            return static_cast<value_type>(*prev);
+        }
     }
 
     /**
@@ -275,21 +289,19 @@ public:
         }
     }
 
-    /** @brief Last element matching `pred` (full scan); throws if no match. */
+    /** @brief Last element matching `pred` (full scan); throws if no match.
+     *  @details Does not require `value_type` to be default-constructible. */
     template <class Pred>
     [[nodiscard]] value_type last_if(Pred&& pred) const
     {
-        bool found = false;
-        value_type out{};
+        std::optional<value_type> out;
         for (iterator it = derived().begin(); it != derived().end(); ++it) {
-            if (pred(*it)) {
-                out = *it;
-                found = true;
-            }
+            if (pred(*it))
+                out.emplace(static_cast<value_type>(*it));
         }
-        if (!found)
+        if (!out)
             throw std::out_of_range("qb::linq::last_if");
-        return out;
+        return std::move(*out);
     }
 
     /** @brief Last match by value, or default if none. */
@@ -488,6 +500,61 @@ public:
     /** @brief `single_view(v).concat(*this)` — one element before the sequence. */
     template <class T>
     [[nodiscard]] auto prepend(T&& v) const;
+
+    /**
+     * @brief Projects each element to a sub-range via `f` and flattens into a single sequence (C# `SelectMany`).
+     * @details `f(*it)` must return a range (anything with `begin()`/`end()`). Lazily evaluated.
+     */
+    template <class F>
+    [[nodiscard]] flat_map_view<iterator, std::decay_t<F>> flat_map(F&& f) const;
+
+    /** @brief Alias for `flat_map` matching C# `SelectMany` naming. */
+    template <class F>
+    [[nodiscard]] flat_map_view<iterator, std::decay_t<F>> select_many_flatten(F&& f) const;
+
+    /**
+     * @brief Overlapping sliding windows of `size` elements, each yielded as a `std::vector` (by value).
+     * @details Last windows may have fewer than `size` elements if the sequence is shorter than `size`.
+     *          `size == 0` is clamped to 1. Lazy per-window: each `operator++` advances by one element.
+     */
+    [[nodiscard]] sliding_window_view<iterator> sliding_window(std::size_t size) const;
+
+    /**
+     * @brief Static cast of each element to `U` (complement to `of_type<U>()`).
+     * @details Lazy; applies `static_cast<U>(*it)` per element. Unlike `of_type` (which uses `dynamic_cast`
+     *          and filters), `cast` assumes every element is convertible and casts unconditionally.
+     */
+    template <class U>
+    [[nodiscard]] auto cast() const
+    {
+        return select([](reference v) -> U { return static_cast<U>(v); });
+    }
+
+    /**
+     * @brief Group by key and reduce each group in one pass (no intermediate collections).
+     * @details Equivalent to `group_by(key) → select(reduce)`, but done in a single traversal.
+     *          Returns `materialized_range` over `vector<pair<Key, Acc>>` in first-seen key order.
+     * @param keyf Key projection: `keyf(*it)` → hashable key.
+     * @param seed Initial accumulator per group.
+     * @param reducer Binary: `reducer(acc, *it)` → updated acc.
+     */
+    template <class KeyFn, class Acc, class Reducer>
+    [[nodiscard]] auto aggregate_by(KeyFn&& keyf, Acc const& seed, Reducer&& reducer) const
+        -> materialized_range<
+            typename std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, Acc>>::iterator,
+            std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, Acc>>>;
+
+    /**
+     * @brief Group by key and reduce each group without a seed — first element per key is the initial value.
+     * @details Throws `std::out_of_range` if any group would be empty (impossible by construction since groups
+     *          are created on first encounter). Returns `materialized_range` over `vector<pair<Key, value_type>>`
+     *          in first-seen key order.
+     */
+    template <class KeyFn, class Reducer>
+    [[nodiscard]] auto reduce_by(KeyFn&& keyf, Reducer&& reducer) const
+        -> materialized_range<
+            typename std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, value_type>>::iterator,
+            std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, value_type>>>;
 
     /** @brief Unique elements in unspecified order (`std::unordered_set`). */
     [[nodiscard]] auto to_unordered_set() const;
@@ -1244,23 +1311,22 @@ public:
         return *b;
     }
 
-    /** @brief Unique match under `pred`; throws if 0 or >1 matches. */
+    /** @brief Unique match under `pred`; throws if 0 or >1 matches.
+     *  @details Does not require `value_type` to be default-constructible. */
     template <class Pred>
     [[nodiscard]] value_type single_if(Pred&& pred) const
     {
-        bool found = false;
-        value_type val{};
+        std::optional<value_type> val;
         for (iterator it = derived().begin(); it != derived().end(); ++it) {
             if (pred(*it)) {
-                if (found)
+                if (val)
                     throw std::out_of_range("qb::linq::single_if: more than one match");
-                val = *it;
-                found = true;
+                val.emplace(static_cast<value_type>(*it));
             }
         }
-        if (!found)
+        if (!val)
             throw std::out_of_range("qb::linq::single_if: no match");
-        return val;
+        return std::move(*val);
     }
 
     /** @brief At most one match: value or default; default if ambiguous. */

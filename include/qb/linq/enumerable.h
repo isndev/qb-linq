@@ -318,6 +318,33 @@ public:
     {
         return pipe(static_cast<Handle const&>(*this).prepend(std::forward<T>(v)));
     }
+
+    /** @brief Project each element to a sub-range and flatten (C# `SelectMany`). */
+    template <class F>
+    [[nodiscard]] auto flat_map(F&& f) const
+    {
+        return pipe(static_cast<Handle const&>(*this).flat_map(std::forward<F>(f)));
+    }
+
+    /** @brief Alias for `flat_map` matching C# `SelectMany` naming. */
+    template <class F>
+    [[nodiscard]] auto select_many_flatten(F&& f) const
+    {
+        return pipe(static_cast<Handle const&>(*this).select_many_flatten(std::forward<F>(f)));
+    }
+
+    /** @brief Overlapping sliding windows of `size` elements (each yielded as a `std::vector`). */
+    [[nodiscard]] auto sliding_window(std::size_t size) const
+    {
+        return pipe(static_cast<Handle const&>(*this).sliding_window(size));
+    }
+
+    /** @brief Static cast each element to `U` (complement to `of_type<U>()`). */
+    template <class U>
+    [[nodiscard]] auto cast() const
+    {
+        return pipe(static_cast<Handle const&>(*this).template cast<U>());
+    }
     /** @} */
 
     /** @name Sets and maps (materializing) */
@@ -429,6 +456,22 @@ public:
     [[nodiscard]] auto count_by(KeyFn&& keyf) const
     {
         return pipe(static_cast<Handle const&>(*this).count_by(std::forward<KeyFn>(keyf)));
+    }
+
+    /** @brief Group by key and reduce each group in one pass (no intermediate collections). */
+    template <class KeyFn, class Acc, class Reducer>
+    [[nodiscard]] auto aggregate_by(KeyFn&& keyf, Acc const& seed, Reducer&& reducer) const
+    {
+        return pipe(static_cast<Handle const&>(*this).aggregate_by(
+            std::forward<KeyFn>(keyf), seed, std::forward<Reducer>(reducer)));
+    }
+
+    /** @brief Group by key and reduce each group without seed — first element per key is initial value. */
+    template <class KeyFn, class Reducer>
+    [[nodiscard]] auto reduce_by(KeyFn&& keyf, Reducer&& reducer) const
+    {
+        return pipe(static_cast<Handle const&>(*this).reduce_by(
+            std::forward<KeyFn>(keyf), std::forward<Reducer>(reducer)));
     }
     /** @} */
 

@@ -103,10 +103,12 @@ qb/linq.h
 ### 5.1 Lazy transforms (return new views / `enumerable` via `select_view` etc.)
 
 - `select(F)`, `select_indexed(F)` (`enumerate` + `select`), `select_many(Fs...)` → tuple of loader results per element (**not** C# flattening).
-- `where(P)`, `where_indexed(P)`, `of_type<U>()` (pointer + polymorphic + `dynamic_cast`).
+- `flat_map(F)` / `select_many_flatten(F)` — **true C# `SelectMany`**: project each element to a sub-range, flatten lazily (`flat_map_view`).
+- `where(P)`, `where_indexed(P)`, `of_type<U>()` (pointer + polymorphic + `dynamic_cast`), `cast<U>()` (lazy `static_cast`, complement to `of_type`).
 - `skip`, `skip_while`, `take`, `take_while`, `reverse`.
 - `concat(Rng)`, `zip(Rng)`, `zip(R2,R3)` → `zip3_view`, `zip_fold(Rng, init, f)` (**single pass** for fold).
 - `default_if_empty`, `default_if_empty(def)`, `enumerate`, `scan(seed,f)`, `chunk(n)`, `stride(step)`.
+- `sliding_window(n)` — overlapping windows of `n` elements as `std::vector`; slides by one element (`sliding_window_view`).
 - `append(T)`, `prepend(T)`, `distinct()`, `distinct_by(kf)`, `union_with(Rng)`.
 
 ### 5.2 Relational
@@ -125,6 +127,8 @@ qb/linq.h
 - `to_set`, `to_unordered_set`.
 - `except(Rng)`, `intersect(Rng)`, `except_by` / `intersect_by` / `union_by` — **C#-style** distinct / first-seen; `*_by` use **hashable keys** (`unordered_set` / `unordered_map`).
 - `count_by(keyfn)` — `vector<pair<key,int>>` in first-seen key order.
+- `aggregate_by(keyfn, seed, reducer)` — group + fold per key in one pass; `vector<pair<Key,Acc>>` first-seen order (`query.h`).
+- `reduce_by(keyfn, reducer)` — group + fold per key without seed; first element per key is initial acc (`query.h`).
 - `take_last(n)`, `skip_last(n)` — materialize to `vector` (ring / trim patterns in implementation).
 
 ### 5.4 Search / quantifiers
@@ -144,6 +148,9 @@ qb/linq.h
 ### 5.6 Element access terminals
 
 - `first`, `last`, `element_at`, `single` families; many throw `std::out_of_range` with messages prefixed **`qb::linq::`**.
+- **`last()`:** supports both bidirectional+ (`std::prev`, returns reference) and forward-only (linear scan, returns by value) via `constexpr if`.
+- **`last_if` / `single_if`:** use `std::optional<value_type>` internally — do **not** require default-constructible `value_type`.
+- **`*_or_default` / `*_or_default_if` variants:** return `value_type{}` and therefore **require** default-constructible `value_type`.
 
 ---
 
@@ -202,11 +209,13 @@ qb/linq.h
 | `chunk_view` | forward | **`chunk_iterator`:** each `++` fills internal **`vector`** chunk (`load_chunk`). |
 | `stride_view` | forward (`stride_iterator` advertises forward) | `++` uses RA `+= step` when base is RA, else stepped loop. |
 | `scan_view` | forward | **`F` in the view** (`mutable` for const `begin()`); iterator holds **`F*`** + acc + `scan_acc_cache` for `operator*`. No refcount. |
+| `flat_map_view` | forward | **`F` in the view** (`mutable`); projects each outer to sub-range, yields inner elements. Iterators hold **`F*`** (same lifetime rule as `scan_view`). |
+| `sliding_window_view` | forward | Each `operator*` copies up to `n` elements into internal `std::vector`; slides by one. |
 
 **Out-of-line `query_range_algorithms` split:**
 
-- **`query.h`:** `group_by`, `order_by`, `to_vector`, `to_unordered_map`, `to_map`, `to_dictionary`, `except`, `intersect`, `except_by`, `intersect_by`, `union_by`, `count_by`, `take_last`, `skip_last`, `join`, `left_join`, `right_join`, `group_join`, `to_unordered_set`, `to_set`.
-- **`extra_views.h` (tail):** `enumerate`, `scan`, `concat`, `zip` (binary + ternary overload), `default_if_empty(value_type)`, `distinct_by`, `distinct`, `union_with`, `chunk`, `stride`, `append`, `prepend`.
+- **`query.h`:** `group_by`, `order_by`, `to_vector`, `to_unordered_map`, `to_map`, `to_dictionary`, `except`, `intersect`, `except_by`, `intersect_by`, `union_by`, `count_by`, `aggregate_by`, `reduce_by`, `take_last`, `skip_last`, `join`, `left_join`, `right_join`, `group_join`, `to_unordered_set`, `to_set`.
+- **`extra_views.h` (tail):** `enumerate`, `scan`, `concat`, `zip` (binary + ternary overload), `default_if_empty(value_type)`, `distinct_by`, `distinct`, `union_with`, `chunk`, `stride`, `append`, `prepend`, `flat_map`, `select_many_flatten`, `sliding_window`.
 
 ---
 

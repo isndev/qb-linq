@@ -1083,6 +1083,69 @@ auto query_range_algorithms<Derived, Iter>::to_set() const
     return wrap_materialized(std::move(owner));
 }
 
+/** @brief Out-of-line `aggregate_by`: group by key and reduce each group in one pass. */
+template <class Derived, class Iter>
+template <class KeyFn, class Acc, class Reducer>
+auto query_range_algorithms<Derived, Iter>::aggregate_by(KeyFn&& keyf, Acc const& seed, Reducer&& reducer) const
+    -> materialized_range<
+        typename std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, Acc>>::iterator,
+        std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, Acc>>>
+{
+    using ref = typename query_range_algorithms<Derived, Iter>::reference;
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    using K = std::decay_t<std::invoke_result_t<KeyFn&, ref>>;
+    using pair_t = std::pair<K, Acc>;
+    using vec_t = std::vector<pair_t>;
+
+    std::unordered_map<K, std::size_t> key_to_idx;
+    auto owner = std::make_shared<vec_t>();
+    reserve_if_random_access(*owner, derived().begin(), derived().end());
+
+    for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
+        K k = keyf(*it);
+        auto ins = key_to_idx.emplace(k, owner->size());
+        if (ins.second) {
+            owner->emplace_back(std::move(k), reducer(seed, *it));
+        } else {
+            auto& acc = (*owner)[ins.first->second].second;
+            acc = reducer(std::move(acc), *it);
+        }
+    }
+    return wrap_materialized(std::move(owner));
+}
+
+/** @brief Out-of-line `reduce_by`: group by key and fold without seed. */
+template <class Derived, class Iter>
+template <class KeyFn, class Reducer>
+auto query_range_algorithms<Derived, Iter>::reduce_by(KeyFn&& keyf, Reducer&& reducer) const
+    -> materialized_range<
+        typename std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, value_type>>::iterator,
+        std::vector<std::pair<std::decay_t<std::invoke_result_t<KeyFn&, reference>>, value_type>>>
+{
+    using ref = typename query_range_algorithms<Derived, Iter>::reference;
+    using iterator_t = typename query_range_algorithms<Derived, Iter>::iterator;
+    using K = std::decay_t<std::invoke_result_t<KeyFn&, ref>>;
+    using val_t = typename query_range_algorithms<Derived, Iter>::value_type;
+    using pair_t = std::pair<K, val_t>;
+    using vec_t = std::vector<pair_t>;
+
+    std::unordered_map<K, std::size_t> key_to_idx;
+    auto owner = std::make_shared<vec_t>();
+    reserve_if_random_access(*owner, derived().begin(), derived().end());
+
+    for (iterator_t it = derived().begin(); it != derived().end(); ++it) {
+        K k = keyf(*it);
+        auto ins = key_to_idx.emplace(k, owner->size());
+        if (ins.second) {
+            owner->emplace_back(std::move(k), static_cast<val_t>(*it));
+        } else {
+            auto& acc = (*owner)[ins.first->second].second;
+            acc = reducer(std::move(acc), *it);
+        }
+    }
+    return wrap_materialized(std::move(owner));
+}
+
 } // namespace detail
 
 } // namespace qb::linq

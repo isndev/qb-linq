@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`last()`:** Now works with **forward-only** iterators (linear scan fallback). Previously required bidirectional iterators (`std::prev`). Bidirectional+ paths still use `std::prev` and return by reference; forward-only returns by value.
+- **`last_if`:** No longer requires **default-constructible** `value_type`. Uses `std::optional` internally instead of pre-initializing `value_type{}`.
+- **`single_if`:** No longer requires **default-constructible** `value_type`. Uses `std::optional` internally instead of pre-initializing `value_type{}`.
+
+### Added
+
+- **`flat_map(f)` / `select_many_flatten(f)`:** True C# `SelectMany` — lazy one-to-many projection + flatten. `f(*it)` returns a sub-range; all inner elements are yielded sequentially. Empty inner ranges are skipped automatically.
+- **`sliding_window(n)`:** Overlapping sliding windows of `n` elements, each yielded as a `std::vector` by value. Slides by one element per step. Complements `chunk(n)` (non-overlapping batches). Useful for moving averages, signal processing, n-gram analysis.
+- **`cast<T>()`:** Lazy `static_cast<T>` of each element. Complement to `of_type<T>()` (which uses `dynamic_cast` + filter). Implemented via `select`.
+- **`aggregate_by(keyf, seed, reducer)`:** Group by key and reduce each group in a single pass — no intermediate collections. Returns `materialized_range` over `vector<pair<Key, Acc>>` in first-seen key order. Equivalent to `group_by(key)` + per-group `aggregate`, but O(1) memory per group.
+- **`reduce_by(keyf, reducer)`:** Like `aggregate_by` but uses the first element per key as the initial accumulator (no seed needed). Returns `materialized_range` over `vector<pair<Key, value_type>>`.
+- **Tests (`linq_audit_test.cpp`):** 81 audit tests covering forward-only `last()`, non-default-constructible types with `last_if`/`single_if`, append/prepend edge cases, enumerate, chunk, stride, repeated enumeration, laziness verification, empty/single-element inputs, join edge cases, duplicate handling, factories, sequence equality, scan, zip, default-if-empty, aggregates, exceptions, zip-fold, and `std::forward_list` (strictly forward iterators).
+- **Tests (`linq_new_features_test.cpp`):** 40 tests for `flat_map`, `sliding_window`, `cast<T>()`, `aggregate_by`, `reduce_by` covering empty ranges, single elements, chaining, laziness, edge cases, and real-world patterns (moving average, string concatenation by key, max-by-key).
+
 ## [1.3.0] - 2026-04-01
 
 ### Fixed

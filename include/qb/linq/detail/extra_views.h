@@ -1283,6 +1283,220 @@ public:
 };
 
 // ---------------------------------------------------------------------------
+// flat_map_view — one-to-many projection + flatten (C# SelectMany).
+// ---------------------------------------------------------------------------
+
+/**
+ * @ingroup linq
+ * @brief Iterator that projects each outer element to a sub-range and yields inner elements sequentially.
+ */
+template <class BaseIt, class F>
+class flat_map_iterator {
+    using outer_ref = typename std::iterator_traits<BaseIt>::reference;
+    using inner_range_t = std::decay_t<std::invoke_result_t<F&, outer_ref>>;
+    using inner_it_t = decltype(std::declval<inner_range_t>().begin());
+
+    BaseIt cur_{};
+    BaseIt end_{};
+    F* fn_{nullptr};
+    mutable inner_range_t inner_{};
+    mutable inner_it_t inner_cur_{};
+    mutable inner_it_t inner_end_{};
+    mutable bool inner_loaded_{false};
+    bool at_end_{true};
+
+    void load_inner()
+    {
+        inner_ = (*fn_)(*cur_);
+        inner_cur_ = inner_.begin();
+        inner_end_ = inner_.end();
+        inner_loaded_ = true;
+    }
+
+    void advance_to_valid()
+    {
+        while (cur_ != end_) {
+            if (!inner_loaded_)
+                load_inner();
+            if (inner_cur_ != inner_end_)
+                return;
+            ++cur_;
+            inner_loaded_ = false;
+        }
+        at_end_ = true;
+    }
+
+public:
+    using value_type = typename std::iterator_traits<inner_it_t>::value_type;
+    using reference = typename std::iterator_traits<inner_it_t>::reference;
+    using difference_type = std::ptrdiff_t;
+    using pointer = void;
+    using iterator_category = std::forward_iterator_tag;
+
+    flat_map_iterator() = default;
+
+    flat_map_iterator(BaseIt b, BaseIt e, F* fn, bool is_end)
+        : cur_(std::move(b)), end_(std::move(e)), fn_(fn), at_end_(is_end)
+    {
+        if (!at_end_)
+            advance_to_valid();
+    }
+
+    [[nodiscard]] reference operator*() const { return *inner_cur_; }
+
+    flat_map_iterator& operator++()
+    {
+        ++inner_cur_;
+        if (inner_cur_ == inner_end_) {
+            ++cur_;
+            inner_loaded_ = false;
+            advance_to_valid();
+        }
+        return *this;
+    }
+
+    flat_map_iterator operator++(int)
+    {
+        auto t = *this;
+        ++*this;
+        return t;
+    }
+
+    [[nodiscard]] friend bool operator==(flat_map_iterator const& a, flat_map_iterator const& b) noexcept
+    {
+        return a.at_end_ == b.at_end_ && (a.at_end_ || a.cur_ == b.cur_);
+    }
+    [[nodiscard]] friend bool operator!=(flat_map_iterator const& a, flat_map_iterator const& b) noexcept
+    {
+        return !(a == b);
+    }
+};
+
+/**
+ * @ingroup linq
+ * @brief Lazy one-to-many projection: `f(*it)` returns a range; all inner elements are yielded sequentially.
+ * @details Iterators hold a non-owning `F*` to the view's functor. Must not outlive the view.
+ */
+template <class BaseIt, class F>
+class flat_map_view : public query_range_algorithms<flat_map_view<BaseIt, F>, flat_map_iterator<BaseIt, F>> {
+    BaseIt b_{}, e_{};
+    mutable F fn_{};
+
+public:
+    flat_map_view(BaseIt b, BaseIt e, F fn)
+        : b_(std::move(b)), e_(std::move(e)), fn_(std::move(fn))
+    {}
+
+    [[nodiscard]] flat_map_iterator<BaseIt, F> begin() const
+    {
+        return flat_map_iterator<BaseIt, F>(b_, e_, &fn_, b_ == e_);
+    }
+    [[nodiscard]] flat_map_iterator<BaseIt, F> end() const
+    {
+        return flat_map_iterator<BaseIt, F>(e_, e_, &fn_, true);
+    }
+};
+
+// ---------------------------------------------------------------------------
+// sliding_window_view — overlapping windows of size N.
+// ---------------------------------------------------------------------------
+
+/**
+ * @ingroup linq
+ * @brief Iterator yielding overlapping windows as `std::vector` values.
+ */
+template <class BaseIt>
+class sliding_window_iterator {
+    using elem_t = std::remove_cv_t<typename std::iterator_traits<BaseIt>::value_type>;
+    using window_t = std::vector<elem_t>;
+
+    BaseIt cur_{};
+    BaseIt end_{};
+    std::size_t n_{1};
+    mutable window_t buf_{};
+    bool done_{true};
+
+    void load_window()
+    {
+        buf_.clear();
+        buf_.reserve(n_);
+        auto it = cur_;
+        for (std::size_t i = 0; i < n_ && it != end_; ++i, ++it)
+            buf_.push_back(static_cast<elem_t>(*it));
+    }
+
+public:
+    using value_type = window_t;
+    using reference = window_t const&;
+    using difference_type = std::ptrdiff_t;
+    using pointer = void;
+    using iterator_category = std::forward_iterator_tag;
+
+    sliding_window_iterator() = default;
+
+    sliding_window_iterator(BaseIt b, BaseIt e, std::size_t n, bool is_end)
+        : cur_(std::move(b)), end_(std::move(e)), n_(n < 1 ? 1 : n), done_(is_end)
+    {
+        if (!done_) {
+            if (cur_ == end_)
+                done_ = true;
+            else
+                load_window();
+        }
+    }
+
+    [[nodiscard]] reference operator*() const { return buf_; }
+
+    sliding_window_iterator& operator++()
+    {
+        ++cur_;
+        if (cur_ == end_) {
+            done_ = true;
+        } else {
+            load_window();
+        }
+        return *this;
+    }
+
+    sliding_window_iterator operator++(int)
+    {
+        auto t = *this;
+        ++*this;
+        return t;
+    }
+
+    [[nodiscard]] friend bool operator==(
+        sliding_window_iterator const& a, sliding_window_iterator const& b) noexcept
+    {
+        return a.done_ == b.done_ && (a.done_ || a.cur_ == b.cur_);
+    }
+    [[nodiscard]] friend bool operator!=(
+        sliding_window_iterator const& a, sliding_window_iterator const& b) noexcept
+    {
+        return !(a == b);
+    }
+};
+
+/**
+ * @ingroup linq
+ * @brief Overlapping windows of `n` elements; each `operator++` slides by one element.
+ */
+template <class BaseIt>
+class sliding_window_view
+    : public query_range_algorithms<sliding_window_view<BaseIt>, sliding_window_iterator<BaseIt>> {
+    BaseIt b_{}, e_{};
+    std::size_t n_{1};
+
+public:
+    sliding_window_view(BaseIt b, BaseIt e, std::size_t n)
+        : b_(std::move(b)), e_(std::move(e)), n_(n < 1 ? 1 : n)
+    {}
+
+    [[nodiscard]] sliding_window_iterator<BaseIt> begin() const { return {b_, e_, n_, false}; }
+    [[nodiscard]] sliding_window_iterator<BaseIt> end() const { return {b_, e_, n_, true}; }
+};
+
+// ---------------------------------------------------------------------------
 // query_range_algorithms — concat / zip / default_if_empty / distinct
 // (definitions after view types; declarations in query_range.h)
 // ---------------------------------------------------------------------------
@@ -1412,6 +1626,30 @@ auto query_range_algorithms<Derived, Iter>::prepend(T&& v) const
 {
     using U = std::decay_t<T>;
     return single_view<U>(std::forward<T>(v)).concat(derived());
+}
+
+/** @brief Out-of-line `flat_map`: project each element to sub-range and flatten. */
+template <class Derived, class Iter>
+template <class F>
+flat_map_view<Iter, std::decay_t<F>> query_range_algorithms<Derived, Iter>::flat_map(F&& f) const
+{
+    return flat_map_view<Iter, std::decay_t<F>>(
+        derived().begin(), derived().end(), std::forward<F>(f));
+}
+
+/** @brief Out-of-line `select_many_flatten`: alias for `flat_map`. */
+template <class Derived, class Iter>
+template <class F>
+flat_map_view<Iter, std::decay_t<F>> query_range_algorithms<Derived, Iter>::select_many_flatten(F&& f) const
+{
+    return flat_map(std::forward<F>(f));
+}
+
+/** @brief Out-of-line `sliding_window`: overlapping windows of `size` elements. */
+template <class Derived, class Iter>
+sliding_window_view<Iter> query_range_algorithms<Derived, Iter>::sliding_window(std::size_t size) const
+{
+    return sliding_window_view<Iter>(derived().begin(), derived().end(), size);
 }
 
 } // namespace detail
