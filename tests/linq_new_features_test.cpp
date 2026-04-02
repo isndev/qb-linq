@@ -255,6 +255,8 @@ TEST(SlidingWindow, MovingAverage)
     EXPECT_NEAR(avgs.element_at(0), 2.0, 0.001);
     EXPECT_NEAR(avgs.element_at(1), 3.0, 0.001);
     EXPECT_NEAR(avgs.element_at(2), 4.0, 0.001);
+    EXPECT_NEAR(avgs.element_at(3), 4.5, 0.001);
+    EXPECT_NEAR(avgs.element_at(4), 5.0, 0.001);
 }
 
 TEST(SlidingWindow, CountWithChaining)
